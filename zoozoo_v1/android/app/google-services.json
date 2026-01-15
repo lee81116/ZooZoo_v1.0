@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "630316669530",
+    "project_id": "zoozoo-v1",
+    "storage_bucket": "zoozoo-v1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:630316669530:android:a20697cdc502bc9a4dd663",
+        "android_client_info": {
+          "package_name": "com.example.zoozoo_v1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1bE3Jmo2MQ7mKVhna0WZFQ84GPjEQYsI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

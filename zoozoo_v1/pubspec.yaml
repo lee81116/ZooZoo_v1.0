@@ -1,0 +1,33 @@
+name: zoozoo_v1
+description: ZooZoo 可愛叫車 App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Routing
+  go_router: ^14.0.2
+  
+  # Sensors for parallax effect
+  sensors_plus: ^5.0.1
+  
+  # Maps (OpenStreetMap based - works on web)
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/images/vehicles/
