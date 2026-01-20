@@ -24,6 +24,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
   // Data for the chart
   Map<DateTime, int> _dailyEarnings = {};
   DateTime? _selectedDate;
+  int _dailyGoal = 500; // Default goal
 
   @override
   void initState() {
@@ -142,6 +143,43 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
     });
   }
 
+  void _editGoal() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String newGoal = _dailyGoal.toString();
+        return AlertDialog(
+          title: const Text('設定每日目標'),
+          content: TextField(
+            keyboardType: TextInputType.number,
+            controller: TextEditingController(text: newGoal),
+            onChanged: (value) => newGoal = value,
+            decoration: const InputDecoration(
+              suffixText: '¥',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final int? parsed = int.tryParse(newGoal);
+                if (parsed != null && parsed > 0) {
+                  setState(() => _dailyGoal = parsed);
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('確定'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -195,6 +233,8 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                   onPreviousWeek: _previousWeek,
                   onNextWeek: _nextWeek,
                   onToday: _goToToday,
+                  dailyGoal: _dailyGoal,
+                  onEditGoal: _editGoal,
                 ),
               ),
             

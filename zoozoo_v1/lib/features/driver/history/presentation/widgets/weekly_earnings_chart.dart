@@ -11,6 +11,8 @@ class WeeklyEarningsChart extends StatelessWidget {
   final VoidCallback onPreviousWeek;
   final VoidCallback onNextWeek;
   final VoidCallback onToday;
+  final int dailyGoal;
+  final VoidCallback onEditGoal;
 
   const WeeklyEarningsChart({
     super.key,
@@ -21,10 +23,13 @@ class WeeklyEarningsChart extends StatelessWidget {
     required this.onPreviousWeek,
     required this.onNextWeek,
     required this.onToday,
+    required this.dailyGoal,
+    required this.onEditGoal,
   });
 
   @override
   Widget build(BuildContext context) {
+    // ... (rest of the build method equivalent logic, ensuring imports are safe)
     final sortedKeys = dailyEarnings.keys.toList()
       ..sort((a, b) => a.compareTo(b));
     
@@ -32,6 +37,10 @@ class WeeklyEarningsChart extends StatelessWidget {
     for (var earning in dailyEarnings.values) {
       if (earning > maxEarning) maxEarning = earning.toDouble();
     }
+    // Ensure maxY is at least the dailyGoal + buffer
+    final double goalDouble = dailyGoal.toDouble();
+    if (goalDouble > maxEarning) maxEarning = goalDouble;
+    
     maxEarning = maxEarning == 0 ? 100 : maxEarning * 1.2;
 
     // Date Range String: "M/d - M/d"
@@ -73,11 +82,21 @@ class WeeklyEarningsChart extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '本週收益',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
+                    InkWell(
+                      onTap: onEditGoal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '目標 ¥$dailyGoal',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.edit, size: 12, color: AppColors.textHint),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -113,7 +132,6 @@ class WeeklyEarningsChart extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
             Expanded(
               child: BarChart(
                 BarChartData(
@@ -162,23 +180,42 @@ class WeeklyEarningsChart extends StatelessWidget {
                           final isSelected = selectedDate != null &&
                               DateUtils.isSameDay(selectedDate, date);
                           
+                          // Check if goal reached for this day
+                          final earning = dailyEarnings[date] ?? 0;
+                          final isGoalReached = earning >= dailyGoal;
+
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              DateFormat('E', 'zh_TW').format(date).replaceAll('週', ''),
-                              style: TextStyle(
-                                color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary,
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                fontSize: 12,
-                              ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  DateFormat('E', 'zh_TW').format(date).replaceAll('週', ''),
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                        : AppColors.textSecondary,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                if (isGoalReached)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 2),
+                                    width: 4,
+                                    height: 4,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.warning, // Glowing/Gold color
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                              ],
                             ),
                           );
                         },
-                        reservedSize: 30,
+                        reservedSize: 40,
                       ),
                     ),
                     leftTitles: const AxisTitles(
@@ -192,6 +229,27 @@ class WeeklyEarningsChart extends StatelessWidget {
                     ),
                   ),
                   gridData: const FlGridData(show: false),
+                  extraLinesData: ExtraLinesData(
+                    horizontalLines: [
+                      HorizontalLine(
+                        y: goalDouble,
+                        color: AppColors.accent.withOpacity(0.5),
+                        strokeWidth: 1,
+                        dashArray: [5, 5],
+                        label: HorizontalLineLabel(
+                          show: true,
+                          alignment: Alignment.topRight,
+                          padding: const EdgeInsets.only(right: 5, bottom: 5),
+                          style: TextStyle(
+                            color: AppColors.accent.withOpacity(0.5),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          labelResolver: (line) => 'Goal',
+                        ),
+                      ),
+                    ],
+                  ),
                   borderData: FlBorderData(show: false),
                   barGroups: sortedKeys.asMap().entries.map((entry) {
                     final index = entry.key;
@@ -199,22 +257,26 @@ class WeeklyEarningsChart extends StatelessWidget {
                     final earning = dailyEarnings[date] ?? 0;
                     final isSelected = selectedDate != null &&
                         DateUtils.isSameDay(selectedDate, date);
+                    
+                    final isGoalReached = earning >= dailyGoal;
 
                     return BarChartGroupData(
                       x: index,
                       barRods: [
                         BarChartRodData(
                           toY: earning.toDouble(),
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.primary.withOpacity(0.3),
+                          color: isGoalReached
+                              ? AppColors.warning // Glowing/Gold color if goal reached
+                              : (isSelected 
+                                  ? AppColors.primary 
+                                  : AppColors.primary.withOpacity(0.3)),
                           width: 30,
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(6),
                           ),
                           backDrawRodData: BackgroundBarChartRodData(
                             show: true,
-                            toY: maxEarning,
+                            toY: goalDouble, // Background is the Goal Height
                             color: AppColors.backgroundSecondary,
                           ),
                         ),
