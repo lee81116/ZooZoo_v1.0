@@ -58,29 +58,22 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   static const _defaultEnd = AppLatLng(25.0400, 121.5700);
   static const _defaultZoom = 16.0;
 
-  // House location (near route)
-  static const _houseLocation = AppLatLng(25.0350, 121.5680);
+  static const String _accessToken =
+      'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjRiMzV5MGV1aDNkb2dzd2J0aGVpNyJ9.khYanFeyddvuxj4ZWqzCyA';
 
   // 3D Model configuration - Car
-  static const _carModelAssetPath = 'assets/3dmodels/toy_car.glb';
+  static const _carModelAssetPath = 'assets/3dmodels/the-red-car.glb';
   static const _carModelId = 'car-3d-model';
   static const _carSourceId = 'car-source';
   static const _carLayerId = 'car-layer';
 
-  // 3D Model configuration - House
-  static const _houseModelAssetPath = 'assets/3dmodels/wood_house.glb';
-  static const _houseModelId = 'house-3d-model';
-  static const _houseSourceId = 'house-source';
-  static const _houseLayerId = 'house-layer';
-
-  // Track if 3D models are active
+  // Track if 3D car model is active
   bool _using3DCarModel = false;
-  bool _using3DHouseModel = false;
 
-  // Debug variables
-  double _currentScale = 500.0;
-  double _currentAltitude = 0.0;
-  bool _showDebugControls = true;
+  // Smooth rotation tracking
+  double _currentBearing = 0.0;
+  static const _bearingSmoothFactor = 0.15;
+  bool _isMapUpdating = false;
 
   @override
   void initState() {
@@ -93,11 +86,64 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
 
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 15),
+      duration: const Duration(seconds: 40),
     );
 
     _animationController.addListener(_onAnimationUpdate);
     _animationController.addStatusListener(_onAnimationStatus);
+
+    // Fetch real route from Mapbox Directions API
+    _initializeRealRoute();
+  }
+
+  Future<void> _initializeRealRoute() async {
+    try {
+      final realRoute = await _fetchRoute(_startLocation, _endLocation);
+      if (realRoute.isNotEmpty) {
+        setState(() {
+          _routeWaypoints = realRoute;
+        });
+
+        // Redraw route on map if map is already ready
+        if (_mapboxMap != null) {
+          await _drawRoute();
+          // Reset animation if needed or just let it play on new path
+          _updateCarPosition();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching real route: $e Using mock route fallback.');
+    }
+  }
+
+  Future<List<AppLatLng>> _fetchRoute(AppLatLng start, AppLatLng end) async {
+    final client = HttpClient();
+    try {
+      final uri = Uri.parse(
+          'https://api.mapbox.com/directions/v5/mapbox/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full&access_token=$_accessToken');
+
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+
+      if (response.statusCode == 200) {
+        final responseBody = await response.transform(utf8.decoder).join();
+        final json = jsonDecode(responseBody);
+
+        final routes = json['routes'] as List<dynamic>;
+        if (routes.isNotEmpty) {
+          final geometry = routes[0]['geometry'];
+          final coordinates = geometry['coordinates'] as List<dynamic>;
+
+          return coordinates.map((coord) {
+            final c = coord as List<dynamic>;
+            return AppLatLng(c[1].toDouble(), c[0].toDouble()); // lat, lng
+          }).toList();
+        }
+      }
+      return [];
+    } finally {
+      client.close();
+    }
   }
 
   @override
@@ -128,7 +174,14 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     setState(() {
       _progress = _animationController.value;
     });
-    _updateCarPosition();
+
+    // Prevent flooding the platform channel if previous update is still running
+    if (!_isMapUpdating) {
+      _isMapUpdating = true;
+      _updateCarPosition().whenComplete(() {
+        _isMapUpdating = false;
+      });
+    }
   }
 
   void _onAnimationStatus(AnimationStatus status) {
@@ -152,22 +205,22 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     // Add start and end markers (using circles - more reliable than emoji)
     await _addLocationMarkers();
 
+    // Setup lighting for Mapbox Standard style
+    await _setupLighting();
+
     // Setup car marker (always visible as fallback)
     await _setupCarMarker();
 
     // Try to setup 3D car model
     await _trySetup3DCarModel();
 
-    // Try to setup 3D house model
-    await _trySetup3DHouseModel();
-
-    // Report 3D model status
-    debugPrint(
-        '3D Models status - Car: $_using3DCarModel, House: $_using3DHouseModel');
+    debugPrint('3D Car model status: $_using3DCarModel');
   }
 
   Future<void> _drawRoute() async {
     if (_polylineManager == null) return;
+
+    await _polylineManager!.deleteAll();
 
     final coordinates =
         _routeWaypoints.map((p) => Position(p.longitude, p.latitude)).toList();
@@ -185,21 +238,7 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   Future<void> _addLocationMarkers() async {
     if (_circleAnnotationManager == null) return;
 
-    // Start marker - Green circle
-    await _circleAnnotationManager!.create(
-      CircleAnnotationOptions(
-        geometry: Point(
-          coordinates: Position(
-            _startLocation.longitude,
-            _startLocation.latitude,
-          ),
-        ),
-        circleColor: Colors.green.toARGB32(),
-        circleRadius: 12.0,
-        circleStrokeColor: Colors.white.toARGB32(),
-        circleStrokeWidth: 3.0,
-      ),
-    );
+    // Start marker code removed as per request
 
     // End marker - Red circle (destination/home)
     await _circleAnnotationManager!.create(
@@ -293,13 +332,37 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
           id: _carLayerId,
           sourceId: _carSourceId,
           modelId: _carModelId,
-          modelScale: [500.0, 500.0, 500.0],
+          modelScale: [25.0, 25.0, 25.0],
           modelRotation: [0.0, 0.0, 0.0],
-          modelTranslation: [0.0, 0.0, 0.0],
+          modelTranslation: [0.0, 0.0, 1.0], // Lift 1m to avoid z-fighting
         ),
       );
 
+      // Enable model animation (wheels spinning, etc.)
+      try {
+        await _mapboxMap!.style.setStyleLayerProperty(
+          _carLayerId,
+          'model-animation-enabled',
+          true,
+        );
+        debugPrint('Car model animation enabled');
+      } catch (e) {
+        debugPrint('Could not enable model animation: $e');
+      }
+
       _using3DCarModel = true;
+
+      // Note: Default animation (usually track 0) might be "Static Pose".
+      // We force "running" here based on the user's screenshot.
+      try {
+        await _mapboxMap!.style.setStyleLayerProperty(
+          _carLayerId,
+          'model-animation',
+          'running', // Lowercase as per screenshot
+        );
+      } catch (e) {
+        debugPrint('Failed to set initial animation: $e');
+      }
 
       // Hide icon marker since 3D model is working
       if (_carAnnotation != null && _carAnnotationManager != null) {
@@ -314,44 +377,20 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     }
   }
 
-  /// Try to setup 3D house model (wood_house.glb)
-  Future<void> _trySetup3DHouseModel() async {
+  /// Configure lighting for Mapbox Standard Style
+  Future<void> _setupLighting() async {
     if (_mapboxMap == null) return;
-
     try {
-      debugPrint('Loading house model to temp file...');
-      final modelUri =
-          await _loadModelToTempFile(_houseModelAssetPath, 'house.glb');
-
-      // Add model to style
-      await _mapboxMap!.style.addStyleModel(
-        _houseModelId,
-        modelUri,
+      // Set light preset to "dusk" for dramatic lighting
+      // basemap is the default import id for Standard style
+      await _mapboxMap!.style.setStyleImportConfigProperty(
+        "basemap",
+        "lightPreset",
+        "dusk",
       );
-
-      // Create GeoJSON source at fixed location
-      final geoJson = _createPointGeoJson(_houseLocation, 0);
-      await _mapboxMap!.style.addSource(
-        GeoJsonSource(id: _houseSourceId, data: jsonEncode(geoJson)),
-      );
-
-      // Create ModelLayer
-      await _mapboxMap!.style.addLayer(
-        ModelLayer(
-          id: _houseLayerId,
-          sourceId: _houseSourceId,
-          modelId: _houseModelId,
-          modelScale: [500.0, 500.0, 500.0],
-          modelRotation: [0.0, 0.0, 0.0],
-          modelTranslation: [0.0, 0.0, 0.0],
-        ),
-      );
-
-      _using3DHouseModel = true;
-      debugPrint('3D house model setup successful');
+      debugPrint("Map lighting configured to 'dusk'");
     } catch (e) {
-      debugPrint('3D house model setup failed: $e');
-      _using3DHouseModel = false;
+      debugPrint("Failed to set map lighting: $e");
     }
   }
 
@@ -382,28 +421,68 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     };
   }
 
-  void _updateCarPosition() async {
-    if (_mapboxMap == null) return;
+  /// Lerp bearing with wrap-around handling (shortest path interpolation)
+  double _lerpBearing(double current, double target, double factor) {
+    // Normalize bearings to 0-360
+    current = current % 360;
+    target = target % 360;
+    if (current < 0) current += 360;
+    if (target < 0) target += 360;
 
-    final position = _interpolateAlongRoute(_progress);
-    final bearing = _calculateBearingAlongRoute(_progress);
+    // Calculate the difference
+    double diff = target - current;
 
-    // Update 3D car model position if active
-    if (_using3DCarModel) {
-      try {
-        final geoJson = _createPointGeoJson(position, bearing);
-        await _mapboxMap!.style.setStyleSourceProperty(
-          _carSourceId,
-          'data',
-          jsonEncode(geoJson),
-        );
-      } catch (e) {
-        debugPrint('Failed to update 3D car model: $e');
-      }
+    // Handle wrap-around: choose shortest path
+    if (diff > 180) {
+      diff -= 360;
+    } else if (diff < -180) {
+      diff += 360;
     }
 
-    // Update icon marker position (if still active as fallback)
-    if (_carAnnotation != null && _carAnnotationManager != null) {
+    // Apply lerp
+    double result = current + diff * factor;
+
+    // Normalize result to 0-360
+    result = result % 360;
+    if (result < 0) result += 360;
+
+    return result;
+  }
+
+  Future<void> _updateCarPosition() async {
+    if (_mapboxMap == null) return;
+
+    final state = _calculateRouteState(_progress);
+    final position = state.position;
+    final targetBearing = state.bearing;
+
+    // Smooth the bearing transition
+    _currentBearing =
+        _lerpBearing(_currentBearing, targetBearing, _bearingSmoothFactor);
+
+    final updates = <Future>[];
+
+    // 1. Update 3D Model
+    if (_using3DCarModel) {
+      final geoJson = _createPointGeoJson(position, _currentBearing);
+
+      updates.add(_mapboxMap!.style.setStyleSourceProperty(
+        _carSourceId,
+        'data',
+        jsonEncode(geoJson),
+      ));
+
+      updates.add(_mapboxMap!.style.setStyleLayerProperty(
+        _carLayerId,
+        'model-rotation',
+        jsonEncode([0.0, 0.0, _currentBearing]),
+      ));
+    }
+
+    // 2. Icon Fallback
+    if (_carAnnotation != null &&
+        _carAnnotationManager != null &&
+        !_using3DCarModel) {
       await _carAnnotationManager!.delete(_carAnnotation!);
       _carAnnotation = await _carAnnotationManager!.create(
         PointAnnotationOptions(
@@ -412,32 +491,39 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
           ),
           iconImage: 'car-icon',
           iconSize: 1.0,
-          iconRotate: bearing,
+          iconRotate: _currentBearing,
           iconAnchor: IconAnchor.CENTER,
         ),
       );
     }
 
-    // Move camera to follow car
-    await _mapboxMap?.flyTo(
+    // 3. Move Camera (Synced)
+    updates.add(_mapboxMap!.setCamera(
       CameraOptions(
         center: Point(
           coordinates: Position(position.longitude, position.latitude),
         ),
         zoom: _defaultZoom,
         pitch: 60.0,
-        bearing: bearing,
+        bearing: _currentBearing,
       ),
-      MapAnimationOptions(duration: 100),
-    );
+    ));
+
+    // Execute efficiently
+    try {
+      await Future.wait(updates);
+    } catch (e) {
+      debugPrint('Map update failed: $e');
+    }
   }
 
-  /// Interpolate position along the route waypoints
-  AppLatLng _interpolateAlongRoute(double t) {
-    if (_routeWaypoints.isEmpty) return _startLocation;
-    if (t <= 0) return _routeWaypoints.first;
-    if (t >= 1) return _routeWaypoints.last;
+  /// Calculate both position and bearing based on distance along route
+  ({AppLatLng position, double bearing}) _calculateRouteState(double t) {
+    if (_routeWaypoints.isEmpty) {
+      return (position: _startLocation, bearing: 0.0);
+    }
 
+    // 1. Calculate lengths
     double totalLength = 0;
     final segmentLengths = <double>[];
 
@@ -450,41 +536,46 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
       totalLength += length;
     }
 
+    if (totalLength == 0)
+      return (position: _routeWaypoints.first, bearing: 0.0);
+
+    // 2. Find current segment based on distance
     final targetDistance = t * totalLength;
     double accumulated = 0;
 
     for (int i = 0; i < segmentLengths.length; i++) {
       if (accumulated + segmentLengths[i] >= targetDistance) {
+        // Found current segment [i] -> [i+1]
         final segmentT = (targetDistance - accumulated) / segmentLengths[i];
         final start = _routeWaypoints[i];
         final end = _routeWaypoints[i + 1];
 
-        return AppLatLng(
+        // Interpolate position
+        final position = AppLatLng(
           start.latitude + (end.latitude - start.latitude) * segmentT,
           start.longitude + (end.longitude - start.longitude) * segmentT,
         );
+
+        // Calculate bearing for this segment
+        final bearing = _calculateBearing(
+          start.latitude,
+          start.longitude,
+          end.latitude,
+          end.longitude,
+        );
+
+        return (position: position, bearing: bearing);
       }
       accumulated += segmentLengths[i];
     }
 
-    return _routeWaypoints.last;
-  }
+    // Fallback (end of route)
+    final last = _routeWaypoints.last;
+    final prev = _routeWaypoints[_routeWaypoints.length - 2];
+    final finalBearing = _calculateBearing(
+        prev.latitude, prev.longitude, last.latitude, last.longitude);
 
-  double _calculateBearingAlongRoute(double t) {
-    if (_routeWaypoints.length < 2) return 0;
-
-    final segmentIndex = (t * (_routeWaypoints.length - 1)).floor();
-    final clampedIndex = segmentIndex.clamp(0, _routeWaypoints.length - 2);
-
-    final start = _routeWaypoints[clampedIndex];
-    final end = _routeWaypoints[clampedIndex + 1];
-
-    return _calculateBearing(
-      start.latitude,
-      start.longitude,
-      end.latitude,
-      end.longitude,
-    );
+    return (position: last, bearing: finalBearing);
   }
 
   double _distanceBetween(AppLatLng a, AppLatLng b) {
@@ -505,6 +596,9 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     var bearing = math.atan2(y, x) * 180 / math.pi;
     return (bearing + 360) % 360;
   }
+
+  // Animation switching removed for performance and simplicity
+  // We rely on the initial 'running' state set in setup.
 
   void _startTrip() {
     setState(() {
@@ -572,94 +666,10 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
         children: [
           _buildMap(),
           _buildBottomCard(),
-          if (_showDebugControls) _buildDebugControls(),
+          // if (_showDebugControls) _buildDebugControls(),
         ],
       ),
     );
-  }
-
-  Widget _buildDebugControls() {
-    return Positioned(
-      top: 100,
-      left: 16,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            const Text('3D Model Debugger',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Text('Scale:', style: TextStyle(color: Colors.white)),
-                Expanded(
-                  child: Slider(
-                    value: _currentScale,
-                    min: 1.0,
-                    max: 2000.0,
-                    onChanged: (val) {
-                      setState(() => _currentScale = val);
-                      _updateModelProperties();
-                    },
-                  ),
-                ),
-                Text(_currentScale.toStringAsFixed(0),
-                    style: const TextStyle(color: Colors.white)),
-              ],
-            ),
-            Row(
-              children: [
-                const Text('Alt (Z):', style: TextStyle(color: Colors.white)),
-                Expanded(
-                  child: Slider(
-                    value: _currentAltitude,
-                    min: -50.0,
-                    max: 100.0,
-                    onChanged: (val) {
-                      setState(() => _currentAltitude = val);
-                      _updateModelProperties();
-                    },
-                  ),
-                ),
-                Text(_currentAltitude.toStringAsFixed(1),
-                    style: const TextStyle(color: Colors.white)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _updateModelProperties() async {
-    if (_mapboxMap == null) return;
-    try {
-      if (_using3DCarModel) {
-        await _mapboxMap!.style.setStyleLayerProperty(
-            _carLayerId,
-            'model-scale',
-            jsonEncode([_currentScale, _currentScale, _currentScale]));
-        await _mapboxMap!.style.setStyleLayerProperty(_carLayerId,
-            'model-translation', jsonEncode([0.0, 0.0, _currentAltitude]));
-      }
-      if (_using3DHouseModel) {
-        await _mapboxMap!.style.setStyleLayerProperty(
-            _houseLayerId,
-            'model-scale',
-            jsonEncode(
-                [_currentScale / 2, _currentScale / 2, _currentScale / 2]));
-        await _mapboxMap!.style.setStyleLayerProperty(_houseLayerId,
-            'model-translation', jsonEncode([0.0, 0.0, _currentAltitude]));
-      }
-    } catch (e) {
-      debugPrint('Failed to update options: $e');
-    }
   }
 
   Widget _buildMap() {
