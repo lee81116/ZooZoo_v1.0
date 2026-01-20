@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import 'app/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure Mapbox public access token
+  MapboxOptions.setAccessToken(
+    'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g',
+  );
+
   runApp(const ZooZooApp());
 }
 

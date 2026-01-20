@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/passenger/home/presentation/pages/passenger_main_page.dart';
+import '../../features/passenger/home/presentation/pages/passenger_3d_map_page.dart';
+import '../../core/services/map/map_models.dart';
 import '../../features/passenger/booking/presentation/pages/booking_map_page.dart';
 import '../../features/driver/home/presentation/pages/driver_main_page.dart';
 
@@ -15,6 +17,7 @@ abstract class Routes {
   static const String driverRegister = '/register/driver';
   static const String passengerHome = '/passenger';
   static const String passengerBooking = '/passenger/booking';
+  static const String passenger3DMap = '/passenger/3d-map';
   static const String driverHome = '/driver';
 }
 
@@ -63,6 +66,21 @@ final appRouter = GoRouter(
       path: Routes.passengerBooking,
       name: 'passengerBooking',
       builder: (context, state) => const BookingMapPage(),
+    ),
+
+    // Passenger 3D Map with simulation
+    GoRoute(
+      path: Routes.passenger3DMap,
+      name: 'passenger3DMap',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return Passenger3DMapPage(
+          startLocation: extra?['startLocation'] as AppLatLng?,
+          endLocation: extra?['endLocation'] as AppLatLng?,
+          vehicleType: extra?['vehicleType'] as String?,
+          price: extra?['price'] as int?,
+        );
+      },
     ),
 
     // Driver Home - with swipeable pages
