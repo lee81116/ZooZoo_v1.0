@@ -4,8 +4,13 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'app/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
-void main() {
+import 'package:intl/date_symbol_data_local.dart';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize date formatting for zh_TW
+  await initializeDateFormatting('zh_TW', null);
 
   // Configure Mapbox public access token
   MapboxOptions.setAccessToken(

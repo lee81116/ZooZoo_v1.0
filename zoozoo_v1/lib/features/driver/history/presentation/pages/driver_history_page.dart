@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
+import '../widgets/weekly_earnings_chart.dart';
 import '../../../../../core/models/driver_order_history.dart';
 import '../../../../../core/services/order/order_storage_service.dart';
 import '../../../../../core/theme/app_colors.dart';
@@ -17,13 +17,47 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
   final OrderStorageService _storageService = OrderStorageService();
   List<DriverOrderHistory> _history = [];
   bool _isLoading = true;
-  int _totalEarnings = 0;
-  double _totalDistance = 0.0;
+  
+  // Week navigation
+  late DateTime _currentWeekStart;
+  
+  // Data for the chart
+  Map<DateTime, int> _dailyEarnings = {};
+  DateTime? _selectedDate;
 
   @override
   void initState() {
     super.initState();
+    // Initialize to start of current week (Monday)
+    final now = DateTime.now();
+    // In Dart, weekday 1 is Monday, 7 is Sunday.
+    // We want the start of the week.
+    _currentWeekStart = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    _selectedDate = DateTime(now.year, now.month, now.day);
     _loadHistory();
+  }
+
+  // Filtered history list based on selection
+  List<DriverOrderHistory> get _filteredHistory {
+    if (_selectedDate == null) {
+      return _history; // Fail-safe
+    }
+    return _history.where((order) => DateUtils.isSameDay(order.completedAt, _selectedDate)).toList();
+  }
+
+  int get _displayedTotalEarnings {
+     if (_selectedDate == null) return 0;
+     return _dailyEarnings[_selectedDate] ?? 0;
+  }
+  
+  // Data for the chart for the CURRENTLY VIEWED week
+  Map<DateTime, int> get _currentWeekEarnings {
+    final Map<DateTime, int> weekData = {};
+    for (int i = 0; i < 7; i++) {
+      final date = _currentWeekStart.add(Duration(days: i));
+      weekData[date] = _dailyEarnings[date] ?? 0;
+    }
+    return weekData;
   }
 
   Future<void> _loadHistory() async {
@@ -31,23 +65,65 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
     
     try {
       final history = await _storageService.getOrderHistory();
-      final earnings = await _storageService.getTotalEarnings();
-      final distance = await _storageService.getTotalDistance();
       
+      // Process ALL history into daily earnings map
+      final Map<DateTime, int> dailyEarnings = {};
+      
+      for (var order in history) {
+        final date = DateTime(
+          order.completedAt.year,
+          order.completedAt.month,
+          order.completedAt.day,
+        );
+        dailyEarnings[date] = (dailyEarnings[date] ?? 0) + order.price;
+      }
+
       setState(() {
         _history = history;
-        _totalEarnings = earnings;
-        _totalDistance = distance;
+        _dailyEarnings = dailyEarnings;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('載入失敗: $e')),
         );
       }
     }
+  }
+
+  void _onDaySelected(DateTime date) {
+    setState(() {
+      _selectedDate = date;
+    });
+  }
+  
+  void _previousWeek() {
+    setState(() {
+      _currentWeekStart = _currentWeekStart.subtract(const Duration(days: 7));
+      // Reset selection to the first day of that week? Or keep relative day?
+      // Let's reset to Monday of that week for simplicity, or keep null?
+      // Apple Health usually keeps the selection if you tap, but if just swiping...
+      // Let's select the first day of the new week to avoid confusion
+      _selectedDate = _currentWeekStart;
+    });
+  }
+
+  void _nextWeek() {
+    setState(() {
+      _currentWeekStart = _currentWeekStart.add(const Duration(days: 7));
+      _selectedDate = _currentWeekStart;
+    });
+  }
+  
+  void _goToToday() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    setState(() {
+      _currentWeekStart = today.subtract(Duration(days: today.weekday - 1));
+      _selectedDate = today;
+    });
   }
 
   @override
@@ -59,82 +135,70 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
       child: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 48),
+            const SizedBox(height: 16),
             const Text(
               '歷史明細',
               style: TextStyle(
-                fontSize: 28,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: AppColors.accent,
               ),
             ),
+            const SizedBox(height: 16),
+            
+            // Weekly Earnings Chart
+            if (!_isLoading)
+              SizedBox(
+                height: 250,
+                child: WeeklyEarningsChart(
+                  dailyEarnings: _currentWeekEarnings,
+                  selectedDate: _selectedDate,
+                  onDaySelected: _onDaySelected,
+                  weekStartDate: _currentWeekStart,
+                  onPreviousWeek: _previousWeek,
+                  onNextWeek: _nextWeek,
+                  onToday: _goToToday,
+                ),
+              ),
+            
             const SizedBox(height: 24),
             
-            // Statistics cards
-            if (!_isLoading && _history.isNotEmpty)
+            // Selected Day Summary
+            if (_selectedDate != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.receipt_long,
-                        label: '訂單數',
-                        value: '${_history.length}',
+                    Text(
+                      DateFormat('MM/dd (E)', 'zh_TW').format(_selectedDate!),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.attach_money,
-                        label: '總收入',
-                        value: '¥$_totalEarnings',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _StatCard(
-                        icon: Icons.route,
-                        label: '總里程',
-                        value: '${_totalDistance.toStringAsFixed(1)} km',
+                    Text(
+                      '總計 ¥$_displayedTotalEarnings',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
                       ),
                     ),
                   ],
                 ),
               ),
-            
-            const SizedBox(height: 16),
-            
-            // History list
+
+             const SizedBox(height: 16),
+
+            // History list for selected day
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : _history.isEmpty
+                  : _filteredHistory.isEmpty
                       ? _buildEmptyState()
                       : _buildHistoryList(),
-            ),
-            
-            // Swipe hint
-            const Padding(
-              padding: EdgeInsets.only(bottom: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.swipe,
-                    color: AppColors.textHint,
-                    size: 20,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    '右滑返回首頁',
-                    style: TextStyle(
-                      color: AppColors.textHint,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -149,23 +213,15 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
         children: [
           Icon(
             Icons.receipt_long_outlined,
-            size: 80,
-            color: AppColors.primary.withOpacity(0.5),
+            size: 60,
+            color: AppColors.primary.withOpacity(0.3),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           const Text(
-            '暫無歷史紀錄',
+            '本日無行程',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '完成訂單後將在此顯示',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textHint,
             ),
           ),
         ],
@@ -174,69 +230,17 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
   }
 
   Widget _buildHistoryList() {
-    return RefreshIndicator(
-      onRefresh: _loadHistory,
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _history.length,
-        itemBuilder: (context, index) {
-          final order = _history[index];
-          return _OrderHistoryCard(order: order);
-        },
-      ),
-    );
-  }
-}
+    // Sort by time descending
+    final sortedList = List<DriverOrderHistory>.from(_filteredHistory)
+      ..sort((a, b) => b.completedAt.compareTo(a.completedAt));
 
-/// Statistics card widget
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.primary, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: sortedList.length,
+      itemBuilder: (context, index) {
+        final order = sortedList[index];
+        return _OrderHistoryCard(order: order);
+      },
     );
   }
 }
@@ -249,7 +253,7 @@ class _OrderHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('MM/dd HH:mm');
+    final dateFormat = DateFormat('HH:mm');
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -268,21 +272,22 @@ class _OrderHistoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Date and Price
+          // Header: Time and Price
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 dateFormat.format(order.completedAt),
                 style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
               ),
               Text(
                 '¥${order.price}',
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: AppColors.accent,
                 ),
@@ -306,7 +311,7 @@ class _OrderHistoryCard extends StatelessWidget {
                   ),
                   Container(
                     width: 2,
-                    height: 24,
+                    height: 20,
                     color: AppColors.textHint,
                   ),
                   Container(
@@ -328,65 +333,24 @@ class _OrderHistoryCard extends StatelessWidget {
                     Text(
                       order.pickupAddress,
                       style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
                         color: AppColors.textPrimary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
                     Text(
                       order.destinationAddress,
                       style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
                         color: AppColors.textPrimary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 12),
-          
-          // Footer: Passenger and Distance
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.person_outline,
-                    size: 16,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    order.passengerName,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.route,
-                    size: 16,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${order.distance.toStringAsFixed(1)} km',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
