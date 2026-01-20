@@ -29,21 +29,25 @@ class _ParallaxBackgroundState extends State<ParallaxBackground> {
   }
 
   void _initAccelerometer() {
-    _accelerometerSubscription = accelerometerEventStream().listen(
-      (event) {
-        if (mounted) {
-          setState(() {
-            // Normalize accelerometer values to offset
-            _offsetX = (event.x / 10) * widget.intensity;
-            _offsetY = (event.y / 10) * widget.intensity;
-          });
-        }
-      },
-      onError: (error) {
-        // Accelerometer not available (e.g., on web/desktop)
-        debugPrint('Accelerometer not available: $error');
-      },
-    );
+    try {
+      _accelerometerSubscription = accelerometerEventStream().listen(
+        (event) {
+          if (mounted) {
+            setState(() {
+              // Normalize accelerometer values to offset
+              _offsetX = (event.x / 10) * widget.intensity;
+              _offsetY = (event.y / 10) * widget.intensity;
+            });
+          }
+        },
+        onError: (error) {
+          // Accelerometer not available (e.g., on web/desktop)
+          debugPrint('Accelerometer not available: $error');
+        },
+      );
+    } catch (e) {
+      debugPrint('Sensors not supported: $e');
+    }
   }
 
   @override

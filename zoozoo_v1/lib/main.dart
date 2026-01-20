@@ -13,9 +13,13 @@ void main() async {
   await initializeDateFormatting('zh_TW', null);
 
   // Configure Mapbox public access token
-  MapboxOptions.setAccessToken(
-    'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g',
-  );
+  try {
+    MapboxOptions.setAccessToken(
+      'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g',
+    );
+  } catch (e) {
+    debugPrint('Mapbox not supported on this platform: $e');
+  }
 
   runApp(const ZooZooApp());
 }

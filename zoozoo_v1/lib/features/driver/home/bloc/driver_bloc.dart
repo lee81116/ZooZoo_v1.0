@@ -4,14 +4,17 @@ import 'package:flutter/foundation.dart';
 
 import '../../../../core/models/order_model.dart';
 import '../../../../core/models/order_status.dart';
+
 import '../../../../core/services/order/mock_order_service.dart';
 import '../../../../core/services/order/order_storage_service.dart';
+import '../../../../core/services/voice/voice_assistant_service.dart';
 import '../data/driver_state.dart';
 
 /// Driver state manager (simplified BLoC pattern)
 class DriverBloc extends ChangeNotifier {
   final MockOrderService _orderService;
   final OrderStorageService _storageService;
+  final VoiceAssistantService _voiceService;
   
   DriverState _state = const DriverState();
   StreamSubscription<Order>? _orderSubscription;
@@ -19,8 +22,10 @@ class DriverBloc extends ChangeNotifier {
   DriverBloc({
     MockOrderService? orderService,
     OrderStorageService? storageService,
+    VoiceAssistantService? voiceService,
   })  : _orderService = orderService ?? MockOrderService(),
-        _storageService = storageService ?? OrderStorageService();
+        _storageService = storageService ?? OrderStorageService(),
+        _voiceService = voiceService ?? VoiceAssistantService();
 
   /// Current state
   DriverState get state => _state;
@@ -42,6 +47,8 @@ class DriverBloc extends ChangeNotifier {
   void goOffline() {
     _orderSubscription?.cancel();
     _orderService.pause();
+    _voiceService.stopListening();
+    _voiceService.stopSpeaking();
     
     _state = _state.copyWith(
       status: DriverStatus.offline,
@@ -52,13 +59,26 @@ class DriverBloc extends ChangeNotifier {
   }
 
   /// Handle new incoming order
-  void _onNewOrder(Order order) {
+  Future<void> _onNewOrder(Order order) async {
     if (_state.status == DriverStatus.online) {
       _state = _state.copyWith(
         status: DriverStatus.hasOrder,
         currentOrder: order,
       );
       notifyListeners();
+
+      // Voice prompt
+      await _voiceService.speak("收到新訂單，從${order.pickupAddress}到${order.destinationAddress}，請問要接單嗎？");
+      
+      // Listen for answer
+      _voiceService.listen(onResult: (result) {
+        final text = result.toLowerCase();
+        if (text.contains("接") || text.contains("好") || text.contains("yes") || text.contains("ok")) {
+          acceptOrder();
+        } else if (text.contains("不") || text.contains("拒") || text.contains("no")) {
+          rejectOrder();
+        }
+      });
     }
   }
 
