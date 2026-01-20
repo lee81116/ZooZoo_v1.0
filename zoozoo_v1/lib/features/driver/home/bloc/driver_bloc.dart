@@ -5,17 +5,22 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/models/order_model.dart';
 import '../../../../core/models/order_status.dart';
 import '../../../../core/services/order/mock_order_service.dart';
+import '../../../../core/services/order/order_storage_service.dart';
 import '../data/driver_state.dart';
 
 /// Driver state manager (simplified BLoC pattern)
 class DriverBloc extends ChangeNotifier {
   final MockOrderService _orderService;
+  final OrderStorageService _storageService;
   
   DriverState _state = const DriverState();
   StreamSubscription<Order>? _orderSubscription;
 
-  DriverBloc({MockOrderService? orderService})
-      : _orderService = orderService ?? MockOrderService();
+  DriverBloc({
+    MockOrderService? orderService,
+    OrderStorageService? storageService,
+  })  : _orderService = orderService ?? MockOrderService(),
+        _storageService = storageService ?? OrderStorageService();
 
   /// Current state
   DriverState get state => _state;
@@ -145,6 +150,9 @@ class DriverBloc extends ChangeNotifier {
         _state.currentOrder!.id,
         OrderStatus.completed,
       );
+      
+      // Save to order history
+      await _storageService.saveOrder(completedOrder);
       
       _state = _state.copyWith(
         status: DriverStatus.completed,
