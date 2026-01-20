@@ -50,6 +50,22 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
      return _dailyEarnings[_selectedDate] ?? 0;
   }
   
+  // Calculate earnings for the month of the currently displayed week
+  // We use the week's end date to determine the "primary" month if it spans two months, 
+  // or just use the start date. Let's use the start date for simplicity.
+  int get _currentMonthEarnings {
+    final targetMonth = _currentWeekStart.month;
+    final targetYear = _currentWeekStart.year;
+    
+    int total = 0;
+    _dailyEarnings.forEach((date, earnings) {
+      if (date.year == targetYear && date.month == targetMonth) {
+        total += earnings;
+      }
+    });
+    return total;
+  }
+  
   // Data for the chart for the CURRENTLY VIEWED week
   Map<DateTime, int> get _currentWeekEarnings {
     final Map<DateTime, int> weekData = {};
@@ -144,6 +160,27 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                 color: AppColors.accent,
               ),
             ),
+            const SizedBox(height: 8),
+            
+            // Monthly Earnings Header
+            if (!_isLoading)
+              Text(
+                '${DateFormat('M', 'zh_TW').format(_currentWeekStart)}月總收益',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            if (!_isLoading)
+              Text(
+                '¥$_currentMonthEarnings',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            
             const SizedBox(height: 16),
             
             // Weekly Earnings Chart
@@ -239,8 +276,178 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
       itemCount: sortedList.length,
       itemBuilder: (context, index) {
         final order = sortedList[index];
-        return _OrderHistoryCard(order: order);
+        return GestureDetector(
+          onTap: () => _showOrderDetails(order),
+          child: _OrderHistoryCard(order: order),
+        );
       },
+    );
+  }
+
+  void _showOrderDetails(DriverOrderHistory order) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '訂單詳情',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Price
+              Text(
+                '¥${order.price}',
+                style: const TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.accent,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Info Rows
+              _DetailRow(
+                icon: Icons.calendar_today,
+                label: '時間',
+                value: DateFormat('yyyy/MM/dd HH:mm').format(order.completedAt),
+              ),
+              const SizedBox(height: 16),
+              _DetailRow(
+                icon: Icons.person_outline,
+                label: '乘客',
+                value: order.passengerName,
+              ),
+              const SizedBox(height: 16),
+              _DetailRow(
+                icon: Icons.map,
+                label: '距離',
+                value: '${order.distance.toStringAsFixed(1)} km',
+              ),
+              const SizedBox(height: 24),
+              
+              // Route
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundSecondary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                         const Icon(Icons.circle, size: 12, color: AppColors.primary),
+                         const SizedBox(width: 8),
+                         Expanded(
+                           child: Text(
+                             order.pickupAddress,
+                             style: const TextStyle(fontSize: 14),
+                           ),
+                         ),
+                      ],
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(left: 5),
+                      child: SizedBox(
+                        height: 20,
+                        child: VerticalDivider(
+                          color: AppColors.textHint,
+                          thickness: 1,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                         const Icon(Icons.circle, size: 12, color: AppColors.accent),
+                         const SizedBox(width: 8),
+                         Expanded(
+                           child: Text(
+                             order.destinationAddress,
+                             style: const TextStyle(fontSize: 14),
+                           ),
+                         ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Close Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    '關閉',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.textHint),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
     );
   }
 }
