@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../history/presentation/pages/driver_history_page.dart';
 import '../../../settings/presentation/pages/driver_settings_page.dart';
+import '../widgets/virtual_companion_widget.dart';
 import 'driver_home_page.dart';
 
 /// Driver main container with swipeable pages
@@ -48,6 +49,15 @@ class _DriverMainPageState extends State<DriverMainPage> {
               DriverSettingsPage(),   // Right: Settings
             ],
           ),
+          // Virtual Companion (Only show on Home Page)
+          if (_currentPage == 1)
+            const Align(
+              alignment: Alignment.center,
+              child: VirtualCompanionWidget(
+                imagePath: 'assets/images/zoozoo_mascot.png',
+              ),
+            ),
+          
           // Page indicator
           Positioned(
             bottom: 50,
