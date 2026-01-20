@@ -20,6 +20,10 @@ dependencies:
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
 
+  # Mapbox 3D Maps
+  mapbox_maps_flutter: ^2.5.0
+  path_provider: ^2.1.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -31,3 +35,4 @@ flutter:
   assets:
     - assets/images/
     - assets/images/vehicles/
+    - assets/3dmodels/

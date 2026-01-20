@@ -30,14 +30,14 @@ class _VehicleSelectionSheetState extends State<VehicleSelectionSheet> {
     ),
     _VehicleType(
       name: '招財貓貓',
-      description: '尊榮寬敞',
+      description: '寬敞舒適',
       price: 120,
       eta: 5,
       imagePath: 'assets/images/vehicles/neko.png',
     ),
     _VehicleType(
       name: '北極熊阿北',
-      description: '減碳環保',
+      description: '大型車輛',
       price: 150,
       eta: 8,
       imagePath: 'assets/images/vehicles/bear.png',

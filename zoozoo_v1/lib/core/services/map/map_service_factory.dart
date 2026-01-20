@@ -6,7 +6,7 @@ import 'mapbox_map_service.dart';
 class MapServiceFactory {
   /// Current active provider
   /// Change this to switch map providers globally
-  static MapProvider currentProvider = MapProvider.openStreetMap;
+  static MapProvider currentProvider = MapProvider.mapbox;
 
   /// Create a map service instance
   static MapService create({MapProvider? provider}) {

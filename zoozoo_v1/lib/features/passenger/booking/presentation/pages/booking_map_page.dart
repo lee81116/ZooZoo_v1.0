@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../../core/constants/map_constants.dart';
 import '../../../../../core/services/map/map.dart';
@@ -79,20 +80,38 @@ class _BookingMapPageState extends State<BookingMapPage> {
   }
 
   void _goToCheckout(String vehicleType, int price) {
-    // Navigate to checkout page (placeholder)
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('前往結帳'),
-        content: Text('車型: $vehicleType\n價格: \$$price\n\n結帳頁面開發中'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('好的'),
-          ),
-        ],
-      ),
-    );
+    // Check if destination is "Home" - trigger 3D simulation
+    final destName = _destinationName?.toLowerCase() ?? '';
+    final isHomeDestination =
+        destName.contains('home') || destName.contains('家');
+
+    if (isHomeDestination && _destinationLocation != null) {
+      // Navigate to 3D map simulation
+      context.push(
+        '/passenger/3d-map',
+        extra: {
+          'startLocation': _userLocation,
+          'endLocation': _destinationLocation,
+          'vehicleType': vehicleType,
+          'price': price,
+        },
+      );
+    } else {
+      // Show normal checkout dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('前往結帳'),
+          content: Text('車型: $vehicleType\n價格: \$$price\n\n結帳頁面開發中'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('好的'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _onBackPressed() {
