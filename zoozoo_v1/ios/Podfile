@@ -38,12 +38,26 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    
+    # --- 加入這段 M4/Apple Silicon 補強 ---
     target.build_configurations.each do |config|
+
       config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
         '$(inherited)',
         'PERMISSION_MICROPHONE=1',
         'PERMISSION_SPEECH_RECOGNITION=1'
       ]
+      
+      # 強制讓所有 Plugin 都知道去哪裡找 Flutter Header
+      config.build_settings['_INFO_PLIST_REQUIRED_ARCHITECTURES'] = 'arm64'
+      
+      # 解決 'Flutter/Flutter.h' file not found 的核心設定
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0' # 確保版本夠新
+      
+      # 某些 Plugin 找不到 Header 是因為 Module 設定問題
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
     end
+    # -------------------------------------
   end
 end

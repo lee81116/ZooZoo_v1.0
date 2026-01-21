@@ -25,7 +25,7 @@ class VoiceAssistantService {
   Future<void> speak(String message) async {
     if (message.isEmpty) return;
     debugPrint('VoiceAssistant: Speaking "$message"');
-    await _flutterTts.stop(); // Stop any previous speech
+    await _flutterTts.stop();
     await _flutterTts.speak(message);
   }
 
