@@ -8,6 +8,7 @@ import '../../bloc/driver_bloc.dart';
 import '../../data/driver_state.dart';
 import '../widgets/incoming_order_sheet.dart';
 import '../widgets/waiting_for_order.dart';
+import '../../../../../../core/services/notification/notification_service.dart';
 
 /// Driver home page with order management
 class DriverHomePage extends StatefulWidget {
@@ -181,6 +182,17 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 ),
               ],
             ),
+          ),
+          TextButton(
+            onPressed: () {
+              debugPrint('Simulate Notification');
+              NotificationService().showVoiceReplyNotification(
+                id: 1,
+                title: '測試推播',
+                body: '這是一則測試語音回覆的通知',
+              );
+            },
+            child: const Text('Simulate Notification'),
           ),
         ],
       ),

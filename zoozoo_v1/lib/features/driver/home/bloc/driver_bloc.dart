@@ -8,6 +8,7 @@ import '../../../../core/models/order_status.dart';
 import '../../../../core/services/order/mock_order_service.dart';
 import '../../../../core/services/order/order_storage_service.dart';
 import '../../../../core/services/voice/voice_assistant_service.dart';
+import '../../../../../../core/services/notification/notification_service.dart';
 import '../data/driver_state.dart';
 
 /// Driver state manager (simplified BLoC pattern)
@@ -67,18 +68,25 @@ class DriverBloc extends ChangeNotifier {
       );
       notifyListeners();
 
-      // Voice prompt
-      await _voiceService.speak("收到新訂單，從${order.pickupAddress}到${order.destinationAddress}，請問要接單嗎？");
+      // 1. 發送通知 (加在這裡)
+      await NotificationService().showVoiceReplyNotification(
+        id: order.id.hashCode,
+        title: '收到新訂單！',
+        body: '從 ${order.pickupAddress} 到 ${order.destinationAddress}',
+      );
+
+      // 2. 語音提示 (原本的邏輯)
+      // await _voiceService.speak("收到新訂單，從${order.pickupAddress}到${order.destinationAddress}，請問要接單嗎？");
       
-      // Listen for answer
-      _voiceService.listen(onResult: (result) {
-        final text = result.toLowerCase();
-        if (text.contains("接") || text.contains("好") || text.contains("yes") || text.contains("ok")) {
-          acceptOrder();
-        } else if (text.contains("不") || text.contains("拒") || text.contains("no")) {
-          rejectOrder();
-        }
-      });
+      // 3. 語音監聽
+      // _voiceService.listen(onResult: (result) {
+      //   final text = result.toLowerCase();
+      //   if (text.contains("接") || text.contains("好") || text.contains("yes") || text.contains("ok")) {
+      //     acceptOrder();
+      //   } else if (text.contains("不") || text.contains("拒") || text.contains("no")) {
+      //     rejectOrder();
+      //   }
+      // });
     }
   }
 

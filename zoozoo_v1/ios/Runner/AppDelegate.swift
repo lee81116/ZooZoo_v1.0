@@ -20,6 +20,12 @@ import AVFoundation // 1. 必須引入這個庫來處理音訊
       print("Failed to set audio session category: \(error)")
     }
 
+    if #available(iOS 10.0, *) {
+      UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
+    } else {
+      
+    }
+
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
