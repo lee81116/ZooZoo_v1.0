@@ -36,7 +36,6 @@ enum TripState { notStarted, inProgress, arrived }
 class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     with TickerProviderStateMixin {
   MapboxMap? _mapboxMap;
-  PolylineAnnotationManager? _polylineManager;
   CircleAnnotationManager? _circleAnnotationManager;
   PointAnnotationManager? _carAnnotationManager;
   PointAnnotation? _carAnnotation;
@@ -56,23 +55,34 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   // Default: Taipei 101 area
   static const _defaultStart = AppLatLng(25.0330, 121.5654);
   static const _defaultEnd = AppLatLng(25.0400, 121.5700);
-  static const _defaultZoom = 16.0;
+  static const _defaultZoom = 17.0; // User requested 17
 
   static const String _accessToken =
       'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjRiMzV5MGV1aDNkb2dzd2J0aGVpNyJ9.khYanFeyddvuxj4ZWqzCyA';
 
   // 3D Model configuration - Car
-  static const _carModelAssetPath = 'assets/3dmodels/the-red-car.glb';
+  static const _carModelAssetPath = 'assets/3dmodels/base_basic_pbr.glb';
   static const _carModelId = 'car-3d-model';
   static const _carSourceId = 'car-source';
   static const _carLayerId = 'car-layer';
+
+  // Route Config
+  static const _routeSourceId = 'route-source';
+  static const _routeLayerId = 'route-layer';
+  static const _routeColor = Color(0xFFADD8E6); // Light Blue
 
   // Track if 3D car model is active
   bool _using3DCarModel = false;
 
   // Smooth rotation tracking
-  double _currentBearing = 0.0;
-  static const _bearingSmoothFactor = 0.15;
+  double _currentBearing = 0.0; // Car's bearing
+  double _cameraBearing = 0.0; // Camera's bearing (lagging)
+  static const _bearingSmoothFactor = 0.85; // Sharp turn for car
+  static const _cameraSmoothFactor = 0.06; // Slow follow for camera
+
+  // Model Calibration: Rotate 180 degrees (User reported car is driving backwards)
+  static const _modelCalibration = 180.0;
+
   bool _isMapUpdating = false;
 
   @override
@@ -149,7 +159,6 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   @override
   void dispose() {
     _animationController.dispose();
-    _polylineManager = null;
     _circleAnnotationManager = null;
     _carAnnotationManager = null;
     super.dispose();
@@ -194,8 +203,7 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     _mapboxMap = mapboxMap;
 
     // Create managers
-    _polylineManager =
-        await mapboxMap.annotations.createPolylineAnnotationManager();
+    // Create managers
     _circleAnnotationManager =
         await mapboxMap.annotations.createCircleAnnotationManager();
 
@@ -218,20 +226,43 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   }
 
   Future<void> _drawRoute() async {
-    if (_polylineManager == null) return;
+    // Initial empty route
+    final geoJson = _createLineGeoJson([]);
 
-    await _polylineManager!.deleteAll();
+    // Add Source
+    await _mapboxMap!.style.addSource(
+      GeoJsonSource(id: _routeSourceId, data: jsonEncode(geoJson)),
+    );
 
-    final coordinates =
-        _routeWaypoints.map((p) => Position(p.longitude, p.latitude)).toList();
-
-    await _polylineManager!.create(
-      PolylineAnnotationOptions(
-        geometry: LineString(coordinates: coordinates),
-        lineColor: AppColors.primary.toARGB32(),
-        lineWidth: 6.0,
+    // Add Layer
+    await _mapboxMap!.style.addLayer(
+      LineLayer(
+        id: _routeLayerId,
+        sourceId: _routeSourceId,
+        lineColor: _routeColor.value,
+        lineWidth: 12.0, // Widened from 6.0
+        lineCap: LineCap.ROUND,
+        lineJoin: LineJoin.ROUND,
+        lineEmissiveStrength: 1.0, // Make it glow/ignore lighting
       ),
     );
+    // Note: We don't populate data here, it's updated in animation loop
+  }
+
+  Map<String, dynamic> _createLineGeoJson(List<List<double>> coordinates) {
+    return {
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'LineString',
+            'coordinates': coordinates,
+          },
+          'properties': {},
+        },
+      ],
+    };
   }
 
   /// Add start and end markers using CircleAnnotation (reliable, no emoji issues)
@@ -332,8 +363,12 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
           id: _carLayerId,
           sourceId: _carSourceId,
           modelId: _carModelId,
-          modelScale: [25.0, 25.0, 25.0],
-          modelRotation: [0.0, 0.0, 0.0],
+          modelScale: [35.0, 35.0, 35.0],
+          modelRotation: [
+            0.0,
+            0.0,
+            0.0
+          ], // Initial rotation (will be updated dynamically)
           modelTranslation: [0.0, 0.0, 1.0], // Lift 1m to avoid z-fighting
         ),
       );
@@ -456,30 +491,56 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     final position = state.position;
     final targetBearing = state.bearing;
 
-    // Smooth the bearing transition
+    // Smooth the bearing transition for the CAR
     _currentBearing =
         _lerpBearing(_currentBearing, targetBearing, _bearingSmoothFactor);
 
+    // Smooth the bearing transition for the CAMERA (Lag effect)
+    // This allows the car to "turn" visually before the camera catches up
+    _cameraBearing =
+        _lerpBearing(_cameraBearing, _currentBearing, _cameraSmoothFactor);
+
     final updates = <Future>[];
 
-    // 1. Update 3D Model
+    // 1. Update 3D Model (Uses Car Bearing)
     if (_using3DCarModel) {
-      final geoJson = _createPointGeoJson(position, _currentBearing);
+      try {
+        final geoJson = _createPointGeoJson(position, _currentBearing);
+        updates.add(_mapboxMap!.style.setStyleSourceProperty(
+          _carSourceId,
+          'data',
+          jsonEncode(geoJson),
+        ));
 
-      updates.add(_mapboxMap!.style.setStyleSourceProperty(
-        _carSourceId,
-        'data',
-        jsonEncode(geoJson),
-      ));
-
-      updates.add(_mapboxMap!.style.setStyleLayerProperty(
-        _carLayerId,
-        'model-rotation',
-        jsonEncode([0.0, 0.0, _currentBearing]),
-      ));
+        // CRITICAL FIX: Rotate the model dynamically!
+        // Apply (Current Bearing + Calibration Offset)
+        updates.add(_mapboxMap!.style.setStyleLayerProperty(
+          _carLayerId,
+          'model-rotation',
+          [0.0, 0.0, _currentBearing + _modelCalibration],
+        ));
+      } catch (e) {
+        debugPrint('Car model update failed: $e');
+      }
     }
 
-    // 2. Icon Fallback
+    // 2. Update Vanishing Route
+    try {
+      final remainingCoords =
+          _getRemainingRouteCoordinates(_progress, position);
+      if (remainingCoords.isNotEmpty) {
+        final routeGeoJson = _createLineGeoJson(remainingCoords);
+        updates.add(_mapboxMap!.style.setStyleSourceProperty(
+          _routeSourceId,
+          'data',
+          jsonEncode(routeGeoJson),
+        ));
+      }
+    } catch (e) {
+      // Silent fail
+    }
+
+    // 3. Icon Fallback (only if car model fails)
     if (_carAnnotation != null &&
         _carAnnotationManager != null &&
         !_using3DCarModel) {
@@ -497,15 +558,16 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
       );
     }
 
-    // 3. Move Camera (Synced)
+    // 4. Move Camera (Synced but using Camera Bearing)
+    // Using setCamera allows smooth frame-by-frame updates without the jitter of flyTo
     updates.add(_mapboxMap!.setCamera(
       CameraOptions(
         center: Point(
           coordinates: Position(position.longitude, position.latitude),
         ),
         zoom: _defaultZoom,
-        pitch: 60.0,
-        bearing: _currentBearing,
+        pitch: 70.0, // Adjusted to 70
+        bearing: _cameraBearing, // Use Loose Camera Bearing
       ),
     ));
 
@@ -515,6 +577,28 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     } catch (e) {
       debugPrint('Map update failed: $e');
     }
+  }
+
+  /// Get coordinates for the remaining path (Vanishing effect)
+  List<List<double>> _getRemainingRouteCoordinates(
+      double t, AppLatLng currentPos) {
+    if (_routeWaypoints.isEmpty) return [];
+
+    // Calculate split index
+    final totalSegments = _routeWaypoints.length - 1;
+    // Safety check
+    if (totalSegments < 1) return [];
+
+    final currentSegmentIndex = (t * totalSegments).floor();
+
+    // Build list: CurrentPos -> Next Waypoint -> ... -> End
+    final coords = <List<double>>[];
+    coords.add([currentPos.longitude, currentPos.latitude]);
+
+    for (int i = currentSegmentIndex + 1; i < _routeWaypoints.length; i++) {
+      coords.add([_routeWaypoints[i].longitude, _routeWaypoints[i].latitude]);
+    }
+    return coords;
   }
 
   /// Calculate both position and bearing based on distance along route
@@ -682,7 +766,7 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
           ),
         ),
         zoom: _defaultZoom,
-        pitch: 60.0,
+        pitch: 70.0,
         bearing: 30.0,
       ),
       styleUri: MapboxStyles.STANDARD,
