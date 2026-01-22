@@ -35,20 +35,19 @@ class _SplashPageState extends State<SplashPage> {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: isDark 
-              ? AppColors.backgroundGradientDark 
+          gradient: isDark
+              ? AppColors.backgroundGradientDark
               : AppColors.backgroundGradient,
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo placeholder
+              // App Logo
               Container(
                 width: 120,
                 height: 120,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
@@ -58,10 +57,14 @@ class _SplashPageState extends State<SplashPage> {
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.local_taxi_rounded,
-                  size: 60,
-                  color: Colors.white,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: Image.asset(
+                    'assets/images/LOGO.png',
+                    width: 120,
+                    height: 120,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
@@ -80,7 +83,9 @@ class _SplashPageState extends State<SplashPage> {
                 '可愛出行，快樂相伴',
                 style: TextStyle(
                   fontSize: 14,
-                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+                  color: isDark
+                      ? AppColors.textSecondaryDark
+                      : AppColors.textSecondary,
                 ),
               ),
             ],
