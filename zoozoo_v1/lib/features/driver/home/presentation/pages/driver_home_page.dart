@@ -206,6 +206,67 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 },
               ),
             ),
+            // Toggles Footer
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildToggleButton(
+                    icon: state.isMuted ? Icons.volume_off : Icons.volume_up,
+                    label: state.isMuted ? '靜音' : '開啟聲音',
+                    isActive: !state.isMuted,
+                    onTap: () => _driverBloc.toggleMute(),
+                  ),
+                  const SizedBox(width: 16),
+                  _buildToggleButton(
+                    icon: state.areNotificationsEnabled ? Icons.notifications_active : Icons.notifications_off,
+                    label: state.areNotificationsEnabled ? '開啟通知' : '關閉通知',
+                    isActive: state.areNotificationsEnabled,
+                    onTap: () => _driverBloc.toggleNotifications(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleButton({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: isActive ? AppColors.primary : AppColors.divider,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isActive ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? AppColors.primary : AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
