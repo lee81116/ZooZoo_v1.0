@@ -78,6 +78,12 @@ class DriverBloc extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update daily earnings goal
+  void updateDailyGoal(int newGoal) {
+    _state = _state.copyWith(dailyEarningsGoal: newGoal);
+    notifyListeners();
+  }
+
   /// Handle new incoming order
   Future<void> _onNewOrder(Order order) async {
     if (_state.status == DriverStatus.online) {

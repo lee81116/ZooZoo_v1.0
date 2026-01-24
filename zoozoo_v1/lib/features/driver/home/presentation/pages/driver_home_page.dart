@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../shared/widgets/glass_button.dart';
@@ -20,25 +21,28 @@ class DriverHomePage extends StatefulWidget {
 }
 
 class _DriverHomePageState extends State<DriverHomePage> {
-  late final DriverBloc _driverBloc;
+  // Access bloc via context, but we need a reference for the listener removal
+  DriverBloc? _bloc;
   bool _isOrderSheetShowing = false;
 
   @override
   void initState() {
     super.initState();
-    _driverBloc = DriverBloc();
-    _driverBloc.addListener(_onStateChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bloc = context.read<DriverBloc>();
+      _bloc?.addListener(_onStateChanged);
+    });
   }
 
   @override
   void dispose() {
-    _driverBloc.removeListener(_onStateChanged);
-    _driverBloc.dispose();
+    _bloc?.removeListener(_onStateChanged);
     super.dispose();
   }
 
   void _onStateChanged() {
-    final state = _driverBloc.state;
+    if (!mounted) return;
+    final state = context.read<DriverBloc>().state;
 
     // Show order sheet when new order arrives
     if (state.status == DriverStatus.hasOrder && !_isOrderSheetShowing) {
@@ -49,7 +53,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   void _showIncomingOrderSheet() {
-    if (_driverBloc.state.currentOrder == null) return;
+    final bloc = context.read<DriverBloc>();
+    if (bloc.state.currentOrder == null) return;
 
     _isOrderSheetShowing = true;
 
@@ -60,23 +65,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => IncomingOrderSheet(
-        order: _driverBloc.state.currentOrder!,
+        order: bloc.state.currentOrder!,
         onAccept: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
-          _driverBloc.acceptOrder();
+          bloc.acceptOrder();
           _showSnackBar('已接單！前往接客');
         },
         onReject: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
-          _driverBloc.rejectOrder();
+          bloc.rejectOrder();
           _showSnackBar('已拒絕訂單');
         },
         onTimeout: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
-          _driverBloc.orderTimeout();
+          bloc.orderTimeout();
           _showSnackBar('訂單已逾時');
         },
       ),
@@ -85,7 +90,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final state = _driverBloc.state;
+    // Watch for state changes to rebuild UI
+    final driverBloc = context.watch<DriverBloc>();
+    final state = driverBloc.state;
     final isOnline = state.status != DriverStatus.offline;
 
     // Show different content based on status
@@ -159,7 +166,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           const SizedBox(height: 40),
           GlassButton(
             onPressed: () {
-              _driverBloc.goOnline();
+              context.read<DriverBloc>().goOnline();
               _showSnackBar('已上線！等待訂單中...');
             },
             height: 64,
@@ -322,22 +329,25 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 10,
-              ),
-            ],
-          ),
-          child: const CircleAvatar(
-            radius: 28,
-            backgroundColor: AppColors.primaryLight,
-            child: Icon(Icons.person, size: 36, color: AppColors.accent),
+        GestureDetector(
+          onTap: () => _showProfilePage(context),
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+            child: const CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.primaryLight,
+              child: Icon(Icons.person, size: 36, color: AppColors.accent),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -429,7 +439,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
               child: InkWell(
                 onTap: () {
                    // Simple tap for now, can be long press
-                   _driverBloc.goOffline();
+                   context.read<DriverBloc>().goOffline();
                    _showSnackBar('已下線休息');
                 },
                 borderRadius: BorderRadius.circular(24),
@@ -709,13 +719,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (state.status == DriverStatus.toPickup) {
-                            _driverBloc.arrivedAtPickup();
+                            context.read<DriverBloc>().arrivedAtPickup();
                             _showSnackBar('已到達上車點');
                           } else if (state.status == DriverStatus.arrived) {
-                            _driverBloc.startTrip();
+                            context.read<DriverBloc>().startTrip();
                             _showSnackBar('行程開始');
                           } else if (state.status == DriverStatus.inTrip) {
-                            _driverBloc.completeTrip();
+                            context.read<DriverBloc>().completeTrip();
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -924,7 +934,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () {
-                    _driverBloc.returnToWaiting();
+                    context.read<DriverBloc>().returnToWaiting();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -947,7 +957,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
               TextButton(
                 onPressed: () {
-                  _driverBloc.goOffline();
+                  context.read<DriverBloc>().goOffline();
                 },
                 child: const Text(
                   '下線休息',
@@ -1122,7 +1132,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('開發中...', style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            // const Text('開發中...', style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.calculate, color: AppColors.primary),
+              ),
+              title: const Text('我的財務導航', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('設定目標與成本'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/driver/financial');
+              },
+            ),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.all(24),
@@ -1130,7 +1156,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    _driverBloc.goOffline();
+                    context.read<DriverBloc>().goOffline();
                     Navigator.pop(context);
                     context.go('/login');
                   },
