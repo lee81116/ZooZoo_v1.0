@@ -24,7 +24,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
   // Data for the chart
   Map<DateTime, int> _dailyEarnings = {};
   DateTime? _selectedDate;
-  int _dailyGoal = 500; // Default goal
+  int _dailyGoal = 500; // Default goal matching DriverState
 
   @override
   void initState() {
