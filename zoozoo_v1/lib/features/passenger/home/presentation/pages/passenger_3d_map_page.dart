@@ -57,6 +57,9 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   static const _defaultEnd = AppLatLng(25.0400, 121.5700);
   static const _defaultZoom = 17.0; // User requested 17
 
+  final TextEditingController _destinationController = TextEditingController();
+  bool _isSearching = false;
+
   static const String _accessToken =
       'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjRiMzV5MGV1aDNkb2dzd2J0aGVpNyJ9.khYanFeyddvuxj4ZWqzCyA';
 
@@ -151,13 +154,85 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
         }
       }
       return [];
+    } catch (e) {
+      debugPrint('Directions API Error: $e');
+      return [];
     } finally {
+      client.close();
+    }
+  }
+
+  Future<void> _searchDestination(String query) async {
+    if (query.isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    final client = HttpClient();
+    try {
+      final uri = Uri.parse(
+          'https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json?access_token=$_accessToken&limit=1&bbox=120.0,21.5,122.5,26.5'); // Limit to Taiwan roughly
+
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+
+      if (response.statusCode == 200) {
+        final responseBody = await response.transform(utf8.decoder).join();
+        final json = jsonDecode(responseBody);
+
+        final features = json['features'] as List<dynamic>;
+        if (features.isNotEmpty) {
+          final center = features[0]['center'] as List<dynamic>;
+          final lng = center[0].toDouble();
+          final lat = center[1].toDouble();
+          final newEnd = AppLatLng(lat, lng);
+
+          setState(() {
+            _endLocation = newEnd;
+          });
+
+          // Focus map on new destination briefly or fitting bounds could be better,
+          // but for now let's just update markers and route.
+          await _addLocationMarkers(); // Update end marker
+
+          await _initializeRealRoute(); // Fetch new route
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text(
+                      '已更新目的地: ${features[0]['text_zh-Hant'] ?? features[0]['text']}')),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('找不到該地點')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Geocoding Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('搜尋失敗: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+      }
       client.close();
     }
   }
 
   @override
   void dispose() {
+    _destinationController.dispose();
     _animationController.dispose();
     _circleAnnotationManager = null;
     _carAnnotationManager = null;
@@ -839,12 +914,46 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
                       color: AppColors.accent,
                     ),
                   ),
-                  const Text(
-                    '準備出發前往目的地',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _destinationController,
+                          decoration: InputDecoration(
+                            hintText: '輸入目的地 (例如: 台北101)',
+                            hintStyle: const TextStyle(
+                                fontSize: 14, color: AppColors.textHint),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 0),
+                            border: InputBorder.none,
+                            suffixIcon: _isSearching
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ))
+                                : IconButton(
+                                    icon: const Icon(Icons.search,
+                                        size: 20, color: AppColors.primary),
+                                    onPressed: () => _searchDestination(
+                                        _destinationController.text),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                          ),
+                          onSubmitted: _searchDestination,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
