@@ -23,10 +23,30 @@ class DriverWaitingView extends StatefulWidget {
   State<DriverWaitingView> createState() => _DriverWaitingViewState();
 }
 
-class _DriverWaitingViewState extends State<DriverWaitingView> {
+class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTickerProviderStateMixin {
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _pointAnnotationManager;
   PolylineAnnotationManager? _polylineAnnotationManager;
+  AnimationController? _timerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _timerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) context.read<DriverBloc>().rejectOrder();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timerController?.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(DriverWaitingView oldWidget) {
@@ -34,9 +54,11 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
     if (widget.state.status == DriverStatus.hasOrder &&
         oldWidget.state.status != DriverStatus.hasOrder) {
       _handleNewOrder(widget.state.currentOrder!);
+      _timerController?.forward(from: 0); // Start timer
     } else if (widget.state.status != DriverStatus.hasOrder &&
         oldWidget.state.status == DriverStatus.hasOrder) {
       _clearOrderRoute();
+      _timerController?.stop(); // Stop timer
     }
   }
 
@@ -53,6 +75,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
           SafeArea(
             child: Column(
               children: [
+                if (widget.state.status == DriverStatus.hasOrder)
+                  _buildTimerBar(), // Add Timer Bar at top
                 if (widget.state.status != DriverStatus.hasOrder)
                   _buildFloatingTopBar(widget.state),
                 const Spacer(),
@@ -108,10 +132,15 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
     try {
       final position = await geo.Geolocator.getCurrentPosition();
       if (!mounted) return;
-      _mapboxMap?.setCamera(CameraOptions(
-        center: Point(coordinates: Position(position.longitude, position.latitude)),
-        zoom: 15.0,
-      ));
+      
+      _mapboxMap?.easeTo(
+        CameraOptions(
+          center: Point(coordinates: Position(position.longitude, position.latitude)),
+          zoom: 15.0,
+          padding: MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),
+        ),
+        MapAnimationOptions(duration: 1200), // Smooth transition
+      );
     } catch (e) {
       debugPrint('Error centering map: $e');
     }
@@ -130,7 +159,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
       _polylineAnnotationManager ??= await _mapboxMap!.annotations.createPolylineAnnotationManager();
 
       // 2. Add Markers (Start & End)
-      final markerImage = await _createMarkerImage(AppColors.accent); // Reuse or create simple marker logic
+      final markerImage = await _createMarkerImage(AppColors.accent); 
       
       await _pointAnnotationManager?.create(PointAnnotationOptions(
         geometry: Point(coordinates: pickupPos),
@@ -138,21 +167,19 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
         iconSize: 1.0,
       ));
 
-      // 3. Draw Route (Simple Line)
+      // 3. Draw Route (White Line)
       await _polylineAnnotationManager?.create(PolylineAnnotationOptions(
         geometry: LineString(coordinates: [currentPos, pickupPos]),
-        lineColor: AppColors.accent.value,
+        lineColor: Colors.white.value, // White color
         lineWidth: 4.0,
       ));
 
-      // 4. Fit Bounds
-      // Calculate Bounds
+      // 4. Fit Bounds with Animation
       final minLat = min(currentPos.lat, pickupPos.lat);
       final maxLat = max(currentPos.lat, pickupPos.lat);
       final minLng = min(currentPos.lng, pickupPos.lng);
       final maxLng = max(currentPos.lng, pickupPos.lng);
       
-      // Add padding
       final padding = 100.0;
       final camera = await _mapboxMap!.cameraForCoordinateBounds(
         CoordinateBounds(
@@ -160,14 +187,17 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
             northeast: Point(coordinates: Position(maxLng, maxLat)),
             infiniteBounds: false
         ),
-        MbxEdgeInsets(top: padding, left: padding, bottom: 300, right: padding), // Bottom padding for UI
+        MbxEdgeInsets(top: padding, left: padding, bottom: 300, right: padding), 
         0, 
         0,
         null,
         null
       );
       
-      _mapboxMap?.setCamera(camera);
+      _mapboxMap?.flyTo(
+        camera,
+        MapAnimationOptions(duration: 1500), // Progressive zoom (1.5s)
+      );
 
     } catch (e) {
       debugPrint("Error handling new order map update: $e");
@@ -250,6 +280,30 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
           )
         ],
       ),
+    );
+  }
+
+  Widget _buildTimerBar() {
+    if (_timerController == null) return const SizedBox.shrink();
+
+    return AnimatedBuilder(
+      animation: _timerController!,
+      builder: (context, child) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          height: 6,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: 1.0 - _timerController!.value, // Count down
+              backgroundColor: Colors.white.withOpacity(0.3),
+              valueColor: AlwaysStoppedAnimation(
+                Color.lerp(Colors.green, Colors.red, _timerController!.value)!, // Green -> Red
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
