@@ -5,6 +5,8 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
 import 'dart:math';
+import 'dart:convert';
+import 'dart:io';
 import '../../../../../core/models/order_model.dart'; // Import Order Model
 import '../../../../../core/theme/app_colors.dart';
 import '../../bloc/driver_bloc.dart';
@@ -18,6 +20,9 @@ class DriverWaitingView extends StatefulWidget {
     super.key,
     required this.state,
   });
+
+  // Mapbox Access Token (should ideally be in a config file)
+  static const String _accessToken = 'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g';
 
   @override
   State<DriverWaitingView> createState() => _DriverWaitingViewState();
@@ -146,6 +151,37 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
     }
   }
 
+  Future<List<Position>> _fetchRouteGeometry(Position start, Position end) async {
+    try {
+      final client = HttpClient();
+      final url = Uri.parse(
+        'https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&access_token=${DriverWaitingView._accessToken}'
+      );
+      
+      final request = await client.getUrl(url);
+      final response = await request.close();
+      
+      if (response.statusCode == 200) {
+        final jsonString = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(jsonString);
+        
+        final routes = data['routes'] as List;
+        if (routes.isNotEmpty) {
+          final geometry = routes[0]['geometry'];
+          final coordinates = geometry['coordinates'] as List;
+          
+          return coordinates.map<Position>((coord) {
+            return Position(coord[0] as num, coord[1] as num);
+          }).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching route: $e");
+    }
+    // Fallback to straight line
+    return [start, end];
+  }
+
   Future<void> _handleNewOrder(Order order) async {
     if (_mapboxMap == null) return;
     
@@ -167,37 +203,47 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
         iconSize: 1.0,
       ));
 
-      // 3. Draw Route (White Line)
+      // 3. Draw Route (Navigation Style)
+      // Fetch actual route geometry
+      final routeGeometry = await _fetchRouteGeometry(currentPos, pickupPos);
+      
       await _polylineAnnotationManager?.create(PolylineAnnotationOptions(
-        geometry: LineString(coordinates: [currentPos, pickupPos]),
-        lineColor: Colors.white.value, // White color
-        lineWidth: 4.0,
+        geometry: LineString(coordinates: routeGeometry),
+        lineColor: Colors.white.value, 
+        lineWidth: 3.0, // Thinner, high quality
+        lineJoin: LineJoin.ROUND,
       ));
 
       // 4. Fit Bounds with Animation
-      final minLat = min(currentPos.lat, pickupPos.lat);
-      final maxLat = max(currentPos.lat, pickupPos.lat);
-      final minLng = min(currentPos.lng, pickupPos.lng);
-      final maxLng = max(currentPos.lng, pickupPos.lng);
-      
-      final padding = 100.0;
-      final camera = await _mapboxMap!.cameraForCoordinateBounds(
-        CoordinateBounds(
-            southwest: Point(coordinates: Position(minLng, minLat)), 
-            northeast: Point(coordinates: Position(maxLng, maxLat)),
-            infiniteBounds: false
-        ),
-        MbxEdgeInsets(top: padding, left: padding, bottom: 300, right: padding), 
-        0, 
-        0,
-        null,
-        null
-      );
-      
-      _mapboxMap?.flyTo(
-        camera,
-        MapAnimationOptions(duration: 1500), // Progressive zoom (1.5s)
-      );
+      if (routeGeometry.isNotEmpty) {
+        // Calculate bounds from all points in route for better fit
+        double minLat = 90.0, maxLat = -90.0, minLng = 180.0, maxLng = -180.0;
+        for (final p in routeGeometry) {
+          if (p.lat < minLat) minLat = p.lat.toDouble();
+          if (p.lat > maxLat) maxLat = p.lat.toDouble();
+          if (p.lng < minLng) minLng = p.lng.toDouble();
+          if (p.lng > maxLng) maxLng = p.lng.toDouble();
+        }
+        
+        final padding = 100.0;
+        final camera = await _mapboxMap!.cameraForCoordinateBounds(
+          CoordinateBounds(
+              southwest: Point(coordinates: Position(minLng, minLat)), 
+              northeast: Point(coordinates: Position(maxLng, maxLat)),
+              infiniteBounds: false
+          ),
+          MbxEdgeInsets(top: padding, left: padding, bottom: 300, right: padding), 
+          0, 
+          0,
+          null,
+          null
+        );
+        
+        _mapboxMap?.flyTo(
+          camera,
+          MapAnimationOptions(duration: 1500), 
+        );
+      }
 
     } catch (e) {
       debugPrint("Error handling new order map update: $e");
