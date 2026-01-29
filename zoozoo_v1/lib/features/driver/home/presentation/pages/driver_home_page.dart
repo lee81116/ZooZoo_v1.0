@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +23,7 @@ class DriverHomePage extends StatefulWidget {
 class _DriverHomePageState extends State<DriverHomePage> {
   // Access bloc via context, but we need a reference for the listener removal
   DriverBloc? _bloc;
+  MapboxMap? _mapboxMap;
   bool _isOrderSheetShowing = false;
 
   @override
@@ -31,7 +32,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _bloc = context.read<DriverBloc>();
       _bloc?.addListener(_onStateChanged);
+      _requestLocationPermission();
     });
+  }
+
+  Future<void> _requestLocationPermission() async {
+    await Permission.locationWhenInUse.request();
   }
 
   @override
@@ -228,36 +234,22 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   Widget _buildMapBackground() {
-    return FlutterMap(
-      options: MapOptions(
-        initialCenter: const LatLng(25.0330, 121.5654), // Taipei 101
-        initialZoom: 15.0,
+    return MapWidget(
+      styleUri: MapboxStyles.DARK,
+      cameraOptions: CameraOptions(
+        center: Point(coordinates: Position(121.5654, 25.0330)),
+        zoom: 15.0,
       ),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.zoozoo.v1',
-        ),
-        // Simulated Heatmap Layers
-        CircleLayer(
-          circles: [
-            CircleMarker(
-              point: const LatLng(25.0350, 121.5680), // Red Zone
-              color: const Color(0xFFD4665A).withOpacity(0.3),
-              useRadiusInMeter: true,
-              radius: 500,
-              borderStrokeWidth: 0,
-            ),
-            CircleMarker(
-              point: const LatLng(25.0400, 121.5500), // Yellow Zone
-              color: const Color(0xFFE6B54A).withOpacity(0.25),
-              useRadiusInMeter: true,
-              radius: 600,
-              borderStrokeWidth: 0,
-            ),
-          ],
-        ),
-      ],
+      onMapCreated: (MapboxMap mapboxMap) {
+        _mapboxMap = mapboxMap;
+        _mapboxMap?.location.updateSettings(
+          LocationComponentSettings(
+            enabled: true,
+            pulsingEnabled: true,
+            puckBearingEnabled: true,
+          ),
+        );
+      },
     );
   }
 
