@@ -38,6 +38,7 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   MapboxMap? _mapboxMap;
   CircleAnnotationManager? _circleAnnotationManager;
   PointAnnotationManager? _carAnnotationManager;
+  CircleAnnotation? _endAnnotation;
   PointAnnotation? _carAnnotation;
 
   // Animation
@@ -118,9 +119,10 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
         });
 
         // Redraw route on map if map is already ready
+        // Redraw route on map if map is already ready
         if (_mapboxMap != null) {
-          await _drawRoute();
-          // Reset animation if needed or just let it play on new path
+          // REMOVED: await _drawRoute(); // Caused crash because source/layer already existed
+          // Just update the visual state
           _updateCarPosition();
         }
       }
@@ -167,6 +169,8 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
 
     setState(() {
       _isSearching = true;
+      _progress = 0.0; // Reset progress
+      _tripState = TripState.notStarted; // Reset trip state
     });
 
     final client = HttpClient();
@@ -347,7 +351,12 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     // Start marker code removed as per request
 
     // End marker - Red circle (destination/home)
-    await _circleAnnotationManager!.create(
+    if (_endAnnotation != null) {
+      await _circleAnnotationManager!.delete(_endAnnotation!);
+      _endAnnotation = null;
+    }
+
+    _endAnnotation = await _circleAnnotationManager!.create(
       CircleAnnotationOptions(
         geometry: Point(
           coordinates: Position(
