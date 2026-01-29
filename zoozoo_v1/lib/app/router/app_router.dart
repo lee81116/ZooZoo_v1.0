@@ -7,7 +7,9 @@ import '../../features/passenger/home/presentation/pages/passenger_main_page.dar
 import '../../features/passenger/home/presentation/pages/passenger_3d_map_page.dart';
 import '../../core/services/map/map_models.dart';
 import '../../features/passenger/booking/presentation/pages/booking_map_page.dart';
+import '../../features/passenger/booking/presentation/pages/booking_map_page.dart';
 import '../../features/driver/home/presentation/pages/driver_main_page.dart';
+import '../../features/driver/financial/presentation/pages/financial_planner_page.dart';
 
 /// Route path constants
 abstract class Routes {
@@ -19,6 +21,7 @@ abstract class Routes {
   static const String passengerBooking = '/passenger/booking';
   static const String passenger3DMap = '/passenger/3d-map';
   static const String driverHome = '/driver';
+  static const String financialPlanner = '/driver/financial';
 }
 
 /// App router configuration
@@ -88,6 +91,13 @@ final appRouter = GoRouter(
       path: Routes.driverHome,
       name: 'driverHome',
       builder: (context, state) => const DriverMainPage(),
+    ),
+
+    // Driver Financial Planner
+    GoRoute(
+      path: Routes.financialPlanner,
+      name: 'financialPlanner',
+      builder: (context, state) => const FinancialPlannerPage(),
     ),
   ],
 

@@ -50,6 +50,9 @@ class DriverState {
   final DateTime? onlineSince;
   final int todayTrips;
   final int todayEarnings;
+  final int dailyEarningsGoal;
+  final bool isMuted;
+  final bool areNotificationsEnabled;
 
   const DriverState({
     this.status = DriverStatus.offline,
@@ -57,6 +60,9 @@ class DriverState {
     this.onlineSince,
     this.todayTrips = 0,
     this.todayEarnings = 0,
+    this.dailyEarningsGoal = 500,
+    this.isMuted = false,
+    this.areNotificationsEnabled = true,
   });
 
   DriverState copyWith({
@@ -67,6 +73,9 @@ class DriverState {
     bool clearOnlineSince = false,
     int? todayTrips,
     int? todayEarnings,
+    int? dailyEarningsGoal,
+    bool? isMuted,
+    bool? areNotificationsEnabled,
   }) {
     return DriverState(
       status: status ?? this.status,
@@ -74,6 +83,9 @@ class DriverState {
       onlineSince: clearOnlineSince ? null : (onlineSince ?? this.onlineSince),
       todayTrips: todayTrips ?? this.todayTrips,
       todayEarnings: todayEarnings ?? this.todayEarnings,
+      dailyEarningsGoal: dailyEarningsGoal ?? this.dailyEarningsGoal,
+      isMuted: isMuted ?? this.isMuted,
+      areNotificationsEnabled: areNotificationsEnabled ?? this.areNotificationsEnabled,
     );
   }
 

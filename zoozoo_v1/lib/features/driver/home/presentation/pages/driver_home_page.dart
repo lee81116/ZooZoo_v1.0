@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../shared/widgets/glass_button.dart';
@@ -18,25 +21,34 @@ class DriverHomePage extends StatefulWidget {
 }
 
 class _DriverHomePageState extends State<DriverHomePage> {
-  late final DriverBloc _driverBloc;
+  // Access bloc via context, but we need a reference for the listener removal
+  DriverBloc? _bloc;
+  MapboxMap? _mapboxMap;
   bool _isOrderSheetShowing = false;
 
   @override
   void initState() {
     super.initState();
-    _driverBloc = DriverBloc();
-    _driverBloc.addListener(_onStateChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bloc = context.read<DriverBloc>();
+      _bloc?.addListener(_onStateChanged);
+      _requestLocationPermission();
+    });
+  }
+
+  Future<void> _requestLocationPermission() async {
+    await Permission.locationWhenInUse.request();
   }
 
   @override
   void dispose() {
-    _driverBloc.removeListener(_onStateChanged);
-    _driverBloc.dispose();
+    _bloc?.removeListener(_onStateChanged);
     super.dispose();
   }
 
   void _onStateChanged() {
-    final state = _driverBloc.state;
+    if (!mounted) return;
+    final state = context.read<DriverBloc>().state;
 
     // Show order sheet when new order arrives
     if (state.status == DriverStatus.hasOrder && !_isOrderSheetShowing) {
@@ -47,7 +59,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   void _showIncomingOrderSheet() {
-    if (_driverBloc.state.currentOrder == null) return;
+    final bloc = context.read<DriverBloc>();
+    if (bloc.state.currentOrder == null) return;
 
     _isOrderSheetShowing = true;
 
@@ -58,23 +71,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => IncomingOrderSheet(
-        order: _driverBloc.state.currentOrder!,
+        order: bloc.state.currentOrder!,
         onAccept: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
-          _driverBloc.acceptOrder();
+          bloc.acceptOrder();
           _showSnackBar('已接單！前往接客');
         },
         onReject: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
-          _driverBloc.rejectOrder();
+          bloc.rejectOrder();
           _showSnackBar('已拒絕訂單');
         },
         onTimeout: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
-          _driverBloc.orderTimeout();
+          bloc.orderTimeout();
           _showSnackBar('訂單已逾時');
         },
       ),
@@ -83,7 +96,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final state = _driverBloc.state;
+    // Watch for state changes to rebuild UI
+    final driverBloc = context.watch<DriverBloc>();
+    final state = driverBloc.state;
     final isOnline = state.status != DriverStatus.offline;
 
     // Show different content based on status
@@ -157,7 +172,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           const SizedBox(height: 40),
           GlassButton(
             onPressed: () {
-              _driverBloc.goOnline();
+              context.read<DriverBloc>().goOnline();
               _showSnackBar('已上線！等待訂單中...');
             },
             height: 64,
@@ -187,23 +202,315 @@ class _DriverHomePageState extends State<DriverHomePage> {
     );
   }
 
-  /// Waiting for orders screen
+  /// Waiting for orders screen (Online Mode)
   Widget _buildWaitingScreen(DriverState state) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(true),
-            Expanded(
-              child: WaitingForOrder(
-                onlineSince: state.onlineSince ?? DateTime.now(),
-                todayTrips: state.todayTrips,
-                todayEarnings: state.todayEarnings,
-                onGoOffline: () {
-                  _driverBloc.goOffline();
-                  _showSnackBar('已下線');
+      resizeToAvoidBottomInset: false,
+      body: Stack(
+        children: [
+          // 1. Full Screen Map (Dark Heatmap)
+          _buildMapBackground(),
+
+          // 2. UI Overlays
+          SafeArea(
+            child: Column(
+              children: [
+                _buildFloatingTopBar(state),
+                const Spacer(),
+                _buildFloatingBottomPanel(state),
+              ],
+            ),
+          ),
+
+          // 3. Avatar & Tips (Bottom Left)
+          Positioned(
+            left: 20,
+            bottom: 120, // Above the bottom panel
+            child: _buildAvatarWithBubble(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMapBackground() {
+    return MapWidget(
+      styleUri: MapboxStyles.DARK,
+      cameraOptions: CameraOptions(
+        center: Point(coordinates: Position(121.5654, 25.0330)),
+        zoom: 15.0,
+      ),
+      onMapCreated: (MapboxMap mapboxMap) {
+        _mapboxMap = mapboxMap;
+        _mapboxMap?.location.updateSettings(
+          LocationComponentSettings(
+            enabled: true,
+            pulsingEnabled: true,
+            puckBearingEnabled: true,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFloatingTopBar(DriverState state) {
+    final double targetAmount = state.dailyEarningsGoal.toDouble();
+    final double progress = (state.todayEarnings / targetAmount).clamp(0.0, 1.0);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Top Slim Progress Bar (Attached to top)
+        Container(
+          height: 4,
+          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Colors.white.withOpacity(0.2),
+              valueColor: const AlwaysStoppedAnimation(AppColors.warning),
+            ),
+          ),
+        ),
+        // Floating Earnings Pill
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E2C).withOpacity(0.9), // Dark control bg
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.currency_yen, color: AppColors.warning, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                '今日已賺',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.8),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '\$${state.todayEarnings}',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAvatarWithBubble() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        GestureDetector(
+          onTap: () => _showProfilePage(context),
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+            child: const CircleAvatar(
+              radius: 28,
+              backgroundColor: AppColors.primaryLight,
+              child: Icon(Icons.person, size: 36, color: AppColors.accent),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+              bottomLeft: Radius.zero,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 5,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Text(
+                '訂單變多了，快往紅區走！',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SizedBox(width: 4),
+              Icon(Icons.local_fire_department, size: 16, color: AppColors.error),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFloatingBottomPanel(DriverState state) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Modes
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '接單模式',
+                style: TextStyle(fontSize: 10, color: AppColors.textHint),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  _buildModeChip('標準', true),
+                  const SizedBox(width: 8),
+                  _buildModeChip('安靜', false),
+                ],
+              ),
+            ],
+          ),
+          
+          // Offline Button (Slide/Hold Style)
+          Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.backgroundSecondary,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                   // Simple tap for now, can be long press
+                   context.read<DriverBloc>().goOffline();
+                   _showSnackBar('已下線休息');
                 },
+                borderRadius: BorderRadius.circular(24),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.power_settings_new, color: AppColors.textSecondary),
+                      SizedBox(width: 8),
+                      Text(
+                        '下線',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeChip(String label, bool isActive) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isActive ? AppColors.accent : AppColors.background,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isActive ? AppColors.accent : AppColors.divider,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: isActive ? Colors.white : AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleButton({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: isActive ? AppColors.primary : AppColors.divider,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isActive ? AppColors.primary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? AppColors.primary : AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -404,13 +711,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
                       child: ElevatedButton(
                         onPressed: () {
                           if (state.status == DriverStatus.toPickup) {
-                            _driverBloc.arrivedAtPickup();
+                            context.read<DriverBloc>().arrivedAtPickup();
                             _showSnackBar('已到達上車點');
                           } else if (state.status == DriverStatus.arrived) {
-                            _driverBloc.startTrip();
+                            context.read<DriverBloc>().startTrip();
                             _showSnackBar('行程開始');
                           } else if (state.status == DriverStatus.inTrip) {
-                            _driverBloc.completeTrip();
+                            context.read<DriverBloc>().completeTrip();
                           }
                         },
                         style: ElevatedButton.styleFrom(
@@ -619,7 +926,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () {
-                    _driverBloc.returnToWaiting();
+                    context.read<DriverBloc>().returnToWaiting();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -642,7 +949,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
               TextButton(
                 onPressed: () {
-                  _driverBloc.goOffline();
+                  context.read<DriverBloc>().goOffline();
                 },
                 child: const Text(
                   '下線休息',
@@ -817,7 +1124,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('開發中...', style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 8),
+            // const Text('開發中...', style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.calculate, color: AppColors.primary),
+              ),
+              title: const Text('我的財務導航', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('設定目標與成本'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/driver/financial');
+              },
+            ),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.all(24),
@@ -825,7 +1148,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    _driverBloc.goOffline();
+                    context.read<DriverBloc>().goOffline();
                     Navigator.pop(context);
                     context.go('/login');
                   },

@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'app/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/driver/home/bloc/driver_bloc.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize date formatting for zh_TW
+  await initializeDateFormatting('zh_TW', null);
 
   // Configure Mapbox public access token
   MapboxOptions.setAccessToken(
@@ -27,13 +34,18 @@ class ZooZooApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeModeNotifier,
       builder: (context, themeMode, _) {
-        return MaterialApp.router(
-          title: 'ZooZoo',
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.light,
-          darkTheme: AppTheme.dark,
-          themeMode: themeMode,
-          routerConfig: appRouter,
+        return MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => DriverBloc()),
+          ],
+          child: MaterialApp.router(
+            title: 'ZooZoo',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light,
+            darkTheme: AppTheme.dark,
+            themeMode: themeMode,
+            routerConfig: appRouter,
+          ),
         );
       },
     );

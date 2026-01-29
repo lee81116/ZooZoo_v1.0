@@ -45,5 +45,25 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- <key>UIApplicationExitsOnSuspend</key>
+	<false/>
+
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict> -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>需要您的位置資訊來計算訂單距離，並在導航時提供準確的接單服務。</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>需要持續存取位置資訊（包含背景執行），以便在您使用其他導航 App 時，仍能接收附近的訂單通知與語音播報。</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>需要持續存取位置資訊，確保司機在背景模式下仍能接收即時訂單。</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>audio</string>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

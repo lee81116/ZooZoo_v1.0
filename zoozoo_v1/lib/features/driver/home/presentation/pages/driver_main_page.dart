@@ -42,7 +42,7 @@ class _DriverMainPageState extends State<DriverMainPage> {
           PageView(
             controller: _pageController,
             onPageChanged: _onPageChanged,
-            children: const [
+            children: [
               DriverHistoryPage(),    // Left: History
               DriverHomePage(),       // Center: Home
               DriverSettingsPage(),   // Right: Settings
