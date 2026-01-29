@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
+import 'dart:math';
+import '../../../../../core/models/order_model.dart'; // Import Order Model
 import '../../../../../core/theme/app_colors.dart';
 import '../../bloc/driver_bloc.dart';
 import '../../data/driver_state.dart';
@@ -23,6 +25,20 @@ class DriverWaitingView extends StatefulWidget {
 
 class _DriverWaitingViewState extends State<DriverWaitingView> {
   MapboxMap? _mapboxMap;
+  PointAnnotationManager? _pointAnnotationManager;
+  PolylineAnnotationManager? _polylineAnnotationManager;
+
+  @override
+  void didUpdateWidget(DriverWaitingView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.state.status == DriverStatus.hasOrder &&
+        oldWidget.state.status != DriverStatus.hasOrder) {
+      _handleNewOrder(widget.state.currentOrder!);
+    } else if (widget.state.status != DriverStatus.hasOrder &&
+        oldWidget.state.status == DriverStatus.hasOrder) {
+      _clearOrderRoute();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,9 +53,13 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
           SafeArea(
             child: Column(
               children: [
-                _buildFloatingTopBar(widget.state),
+                if (widget.state.status != DriverStatus.hasOrder)
+                  _buildFloatingTopBar(widget.state),
                 const Spacer(),
-                _buildFloatingBottomPanel(widget.state),
+                if (widget.state.status == DriverStatus.hasOrder)
+                  _buildNewOrderUI(widget.state.currentOrder!)
+                else
+                  _buildFloatingBottomPanel(widget.state),
               ],
             ),
           ),
@@ -72,10 +92,17 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
             puckBearingEnabled: true, // Shows arrow/cone based on bearing
           ),
         );
-        _centerCameraOnUser();
+        
+        if (widget.state.status == DriverStatus.hasOrder && widget.state.currentOrder != null) {
+          _handleNewOrder(widget.state.currentOrder!);
+        } else {
+          _centerCameraOnUser();
+        }
       },
     );
   }
+
+
 
   Future<void> _centerCameraOnUser() async {
     try {
@@ -88,6 +115,142 @@ class _DriverWaitingViewState extends State<DriverWaitingView> {
     } catch (e) {
       debugPrint('Error centering map: $e');
     }
+  }
+
+  Future<void> _handleNewOrder(Order order) async {
+    if (_mapboxMap == null) return;
+    
+    try {
+      final position = await geo.Geolocator.getCurrentPosition();
+      final currentPos = Position(position.longitude, position.latitude);
+      final pickupPos = Position(order.pickupLocation.longitude, order.pickupLocation.latitude);
+
+      // 1. Initialize Managers if needed
+      _pointAnnotationManager ??= await _mapboxMap!.annotations.createPointAnnotationManager();
+      _polylineAnnotationManager ??= await _mapboxMap!.annotations.createPolylineAnnotationManager();
+
+      // 2. Add Markers (Start & End)
+      final markerImage = await _createMarkerImage(AppColors.accent); // Reuse or create simple marker logic
+      
+      await _pointAnnotationManager?.create(PointAnnotationOptions(
+        geometry: Point(coordinates: pickupPos),
+        image: markerImage,
+        iconSize: 1.0,
+      ));
+
+      // 3. Draw Route (Simple Line)
+      await _polylineAnnotationManager?.create(PolylineAnnotationOptions(
+        geometry: LineString(coordinates: [currentPos, pickupPos]),
+        lineColor: AppColors.accent.value,
+        lineWidth: 4.0,
+      ));
+
+      // 4. Fit Bounds
+      // Calculate Bounds
+      final minLat = min(currentPos.lat, pickupPos.lat);
+      final maxLat = max(currentPos.lat, pickupPos.lat);
+      final minLng = min(currentPos.lng, pickupPos.lng);
+      final maxLng = max(currentPos.lng, pickupPos.lng);
+      
+      // Add padding
+      final padding = 100.0;
+      final camera = await _mapboxMap!.cameraForCoordinateBounds(
+        CoordinateBounds(
+            southwest: Point(coordinates: Position(minLng, minLat)), 
+            northeast: Point(coordinates: Position(maxLng, maxLat)),
+            infiniteBounds: false
+        ),
+        MbxEdgeInsets(top: padding, left: padding, bottom: 300, right: padding), // Bottom padding for UI
+        0, 
+        0,
+        null,
+        null
+      );
+      
+      _mapboxMap?.setCamera(camera);
+
+    } catch (e) {
+      debugPrint("Error handling new order map update: $e");
+    }
+  }
+
+  void _clearOrderRoute() async {
+    await _pointAnnotationManager?.deleteAll();
+    await _polylineAnnotationManager?.deleteAll();
+    _centerCameraOnUser(); // Reset camera
+  }
+
+  Future<Uint8List> _createMarkerImage(Color color) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = color..style = PaintingStyle.fill;
+    final radius = 10.0;
+    canvas.drawCircle(Offset(radius, radius), radius, paint);
+    final borderPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2.0;
+    canvas.drawCircle(Offset(radius, radius), radius, borderPaint);
+    final picture = recorder.endRecording();
+    final img = await picture.toImage((radius * 2).toInt(), (radius * 2).toInt());
+    return (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+  }
+
+  Widget _buildNewOrderUI(Order order) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          )
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('新訂單！距離 ${order.distance.toStringAsFixed(1)} km', 
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('${order.estimatedMinutes} 分鐘後到達上車點', 
+            style: const TextStyle(color: AppColors.textSecondary)),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                     context.read<DriverBloc>().rejectOrder();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.error,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text('拒絕', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                     context.read<DriverBloc>().acceptOrder();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text('接受訂單', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
   }
 
   Widget _buildFloatingTopBar(DriverState state) {

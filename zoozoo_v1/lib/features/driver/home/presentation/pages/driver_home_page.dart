@@ -49,9 +49,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
     final state = context.read<DriverBloc>().state;
 
     // Show order sheet when new order arrives
-    if (state.status == DriverStatus.hasOrder && !_isOrderSheetShowing) {
-      _showIncomingOrderSheet();
-    }
+    // Modified: Handled by DriverWaitingView directly now
+    // if (state.status == DriverStatus.hasOrder && !_isOrderSheetShowing) {
+    //   _showIncomingOrderSheet();
+    // }
 
     setState(() {});
   }
