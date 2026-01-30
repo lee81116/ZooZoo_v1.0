@@ -28,16 +28,17 @@ class DriverTopBar extends StatelessWidget {
                     color: isOnline ? AppColors.success : AppColors.primary,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isOnline 
+                      color: isOnline
                           ? AppColors.success.withOpacity(0.3)
                           : Colors.white.withOpacity(0.5),
                       width: 2,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.white,
-                    size: 24,
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/seal.png',
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -50,7 +51,9 @@ class DriverTopBar extends StatelessWidget {
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: isOnline ? AppColors.success : AppColors.textHint,
+                            color: isOnline
+                                ? AppColors.success
+                                : AppColors.textHint,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -59,8 +62,8 @@ class DriverTopBar extends StatelessWidget {
                           isOnline ? '上線中' : '離線',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isOnline 
-                                ? AppColors.success 
+                            color: isOnline
+                                ? AppColors.success
                                 : AppColors.textSecondary,
                           ),
                         ),

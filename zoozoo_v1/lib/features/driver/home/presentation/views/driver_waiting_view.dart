@@ -458,8 +458,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
             ),
             child: const CircleAvatar(
               radius: 28,
+              backgroundImage: const AssetImage('assets/images/seal.png'),
               backgroundColor: AppColors.primaryLight,
-              child: Icon(Icons.person, size: 36, color: AppColors.accent),
             ),
           ),
         ),
