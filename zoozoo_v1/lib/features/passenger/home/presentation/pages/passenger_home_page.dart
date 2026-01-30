@@ -105,7 +105,7 @@ class PassengerHomePage extends StatelessWidget {
           GlassIconButton(
             icon: Icons.notifications_outlined,
             iconColor: Colors.white,
-            onPressed: () => _showSnackBar(context, '通知功能開發中'),
+            onPressed: () {},
           ),
         ],
       ),
@@ -172,7 +172,8 @@ class PassengerHomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const Icon(Icons.person_outline, size: 80, color: AppColors.primary),
+            const Icon(Icons.person_outline,
+                size: 80, color: AppColors.primary),
             const SizedBox(height: 16),
             const Text(
               '個人主頁',
@@ -183,7 +184,8 @@ class PassengerHomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('開發中...', style: TextStyle(color: AppColors.textSecondary)),
+            const Text('開發中...',
+                style: TextStyle(color: AppColors.textSecondary)),
             const Spacer(),
             Padding(
               padding: const EdgeInsets.all(24),
@@ -194,24 +196,14 @@ class PassengerHomePage extends StatelessWidget {
                     Navigator.pop(context);
                     context.go('/login');
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error),
                   child: const Text('登出'),
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.accent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

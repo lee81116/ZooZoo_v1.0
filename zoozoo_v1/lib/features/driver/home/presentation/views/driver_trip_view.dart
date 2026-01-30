@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
+
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For rootBundle
@@ -14,6 +13,7 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+
 import '../pages/driver_chat_page.dart'; // Import the chat page
 
 import '../../../../../core/models/order_model.dart';
@@ -69,16 +69,25 @@ class _DriverTripViewState extends State<DriverTripView> {
 
   // --- Voice Service ---
   final FlutterTts _flutterTts = FlutterTts();
+  // final stt.SpeechToText _speech = stt.SpeechToText(); // Removed unused
   final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _isListening = false;
-  String _lastWords = '';
+  // --- Navigation Mock State ---
+  List<dynamic> _routeSteps = [];
+  int _currentStepIndex = 0;
+  String _currentInstructionText = "直行";
+  String _currentDistanceText = "0 m";
+  IconData _currentManeuverIcon = Icons.arrow_upward;
+
+  bool _isPanelExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _initVoiceServices();
-
-    // Removed simulation
+    // Auto-expand for pickup to see address, collapse for trip
+    if (widget.state.status == DriverStatus.toPickup) {
+      _isPanelExpanded = true;
+    }
   }
 
   Future<void> _initVoiceServices() async {
@@ -128,12 +137,93 @@ class _DriverTripViewState extends State<DriverTripView> {
           SafeArea(
             child: Column(
               children: [
-                DriverTopBar(
-                  isOnline: true,
-                  onProfileTap: () => _showProfilePage(context),
-                ),
+                if (_routeSteps.isNotEmpty)
+                  _buildNavigationBanner()
+                else
+                  DriverTopBar(
+                    isOnline: true,
+                    onProfileTap: () => _showProfilePage(context),
+                  ),
                 const Spacer(),
                 _buildBottomPanel(context, order),
+              ],
+            ),
+          ),
+
+          // 4. Simulate Message Button (Debug)
+          Positioned(
+            right: 20,
+            bottom: 310,
+            child: FloatingActionButton(
+              heroTag: 'sim_msg_btn',
+              mini: true,
+              backgroundColor: Colors.white,
+              onPressed: () => _speakAndListen("請問還要多久會到？"),
+              child: const Icon(Icons.chat, color: Colors.blue),
+            ),
+          ),
+          // 3. Recenter Button (Floating)
+          Positioned(
+            right: 20,
+            bottom: 250, // Approx above bottom panel
+            child: FloatingActionButton(
+              heroTag: 'recenter_btn',
+              mini: true,
+              backgroundColor: Colors.white,
+              onPressed: _centerCameraOnUser,
+              child: const Icon(Icons.my_location, color: AppColors.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationBanner() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.primary, // Used App Theme Color
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _currentManeuverIcon,
+            color: Colors.white,
+            size: 48,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _currentDistanceText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  _currentInstructionText,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -309,7 +399,10 @@ class _DriverTripViewState extends State<DriverTripView> {
       final currentPos = await geo.Geolocator.getCurrentPosition();
       final startPos = Position(currentPos.longitude, currentPos.latitude);
 
-      final routeGeometry = await _fetchRouteGeometry(startPos, targetPos);
+      final result = await _fetchRouteData(startPos, targetPos);
+
+      final routeGeometry = result['geometry'] as List<List<double>>;
+      final routeSteps = result['steps'] as List<dynamic>;
 
       // 3. Update Route Layer
       if (routeGeometry.isNotEmpty) {
@@ -318,11 +411,55 @@ class _DriverTripViewState extends State<DriverTripView> {
             _routeSourceId, "data", jsonEncode(geoJson));
       }
 
+      // Update Step State
+      if (routeSteps.isNotEmpty) {
+        setState(() {
+          _routeSteps = routeSteps;
+          _currentStepIndex = 0;
+          _updateCurrentStepInfo();
+        });
+      }
+
       // 4. Start Navigation Loop
       _startMockNavigationLoop(
           startPos); // Using "Mock" naming but it's real loc loop now
     } catch (e) {
       debugPrint("Error updating route: $e");
+    }
+  }
+
+  void _updateCurrentStepInfo() {
+    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) return;
+
+    final step = _routeSteps[_currentStepIndex];
+    final distance = (step['distance'] as num).toDouble();
+    final maneuver = step['maneuver'];
+    final instruction = maneuver['instruction'] as String;
+    final type = maneuver['type'] as String;
+    final modifier = maneuver['modifier'] as String?;
+
+    // Icon mapping
+    IconData icon = Icons.arrow_upward;
+    if (type == 'turn') {
+      if (modifier?.contains('left') == true) icon = Icons.turn_left;
+      if (modifier?.contains('right') == true) icon = Icons.turn_right;
+    } else if (type == 'arrive') {
+      icon = Icons.place;
+    }
+
+    // Check for change to trigger voice
+    final bool instructionChanged = instruction != _currentInstructionText;
+
+    setState(() {
+      _currentInstructionText = instruction;
+      _currentDistanceText = distance < 1000
+          ? "${distance.toStringAsFixed(0)} m"
+          : "${(distance / 1000).toStringAsFixed(1)} km";
+      _currentManeuverIcon = icon;
+    });
+
+    if (instructionChanged && !widget.state.isMuted) {
+      _flutterTts.speak(instruction);
     }
   }
 
@@ -368,6 +505,9 @@ class _DriverTripViewState extends State<DriverTripView> {
     // 2. Update Visuals
     final currentPos = Position(pos.longitude, pos.latitude);
     _updateCarVisuals(currentPos, _currentBearing, pos.latitude, pos.longitude);
+
+    // Note: In a real app we would check distance to next step here
+    // For now we just show the static first step instructions
   }
 
   Future<void> _updateCarVisuals(
@@ -415,13 +555,13 @@ class _DriverTripViewState extends State<DriverTripView> {
     return 'file://${file.path}';
   }
 
-  Future<List<List<double>>> _fetchRouteGeometry(
+  Future<Map<String, dynamic>> _fetchRouteData(
       Position start, Position end) async {
     // Fetch from Mapbox Directions API
     final client = HttpClient();
     try {
       final url = Uri.parse(
-          'https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&access_token=$_accessToken');
+          'https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&steps=true&language=zh-TW&access_token=$_accessToken');
       final request = await client.getUrl(url);
       final response = await request.close();
       if (response.statusCode == 200) {
@@ -429,22 +569,29 @@ class _DriverTripViewState extends State<DriverTripView> {
         final data = jsonDecode(jsonString);
         final routes = data['routes'] as List;
         if (routes.isNotEmpty) {
-          final geometry = routes[0]['geometry'];
-          final coordinates = geometry['coordinates'] as List;
-          // Convert [lng, lat] dynamic list to double list
-          return coordinates
+          final geometryData = routes[0]['geometry'];
+          final coordinates = geometryData['coordinates'] as List;
+          final geometry = coordinates
               .map<List<double>>((c) => [c[0].toDouble(), c[1].toDouble()])
               .toList();
+
+          final legs = routes[0]['legs'] as List;
+          final steps = legs.isNotEmpty ? (legs[0]['steps'] as List) : [];
+
+          return {'geometry': geometry, 'steps': steps};
         }
       }
     } catch (e) {
       debugPrint("API Error: $e");
     }
     // Fallback straight line
-    return [
-      [start.lng.toDouble(), start.lat.toDouble()],
-      [end.lng.toDouble(), end.lat.toDouble()]
-    ];
+    return {
+      'geometry': [
+        [start.lng.toDouble(), start.lat.toDouble()],
+        [end.lng.toDouble(), end.lat.toDouble()]
+      ],
+      'steps': []
+    };
   }
 
   Map<String, dynamic> _createLineGeoJson(List<List<double>> coordinates) {
@@ -517,56 +664,52 @@ class _DriverTripViewState extends State<DriverTripView> {
 
   // --- Voice & Message Logic ---
 
-  // --- Voice & Message Logic ---
-
   Future<void> _speakAndListen(String message) async {
-    // 1. Speak (if Voice Broadcast is enabled)
-    if (!widget.state.isMuted) {
-      await _flutterTts.speak("收到乘客訊息：$message。請回覆。");
+    // 1. Announce
+    await _flutterTts.speak("收到乘客訊息: $message");
+    await _flutterTts.awaitSpeakCompletion(true);
 
-      // Wait for speech to finish or use delay
-      await Future.delayed(const Duration(seconds: 4));
-    }
+    // 2. Listen
+    bool available = await _speech.initialize();
+    if (available) {
+      // Find Chinese Locale
+      var locales = await _speech.locales();
+      var locale = locales.firstWhere(
+        (l) => l.localeId == 'zh_TW' || l.localeId == 'zh-TW',
+        orElse: () => locales.firstWhere(
+          (l) => l.localeId.startsWith('zh'),
+          orElse: () => locales.isNotEmpty
+              ? locales.first
+              : stt.LocaleName("zh_TW", "zh_TW"), // Fallback manually
+        ),
+      );
 
-    // 2. Listen (if Chat Voice Reply is enabled)
-    if (widget.state.chatVoiceEnabledSafe) {
-      bool available = await _speech.initialize();
-      if (available) {
-        if (!mounted) return;
-        setState(() => _isListening = true);
-        // _showSnackBar(context, "正在錄音回覆 (5秒)..."); // Removed
+      debugPrint('Selected Locale: ${locale.localeId}');
 
-        await _speech.listen(
-          onResult: (result) {
-            setState(() {
-              _lastWords = result.recognizedWords;
-            });
-          },
-          localeId: "zh_TW",
-        );
-
-        // Stop after 5 seconds
-        await Future.delayed(const Duration(seconds: 5));
-        await _speech.stop();
-
-        if (!mounted) return;
-        setState(() => _isListening = false);
-
-        // 3. Send Reply
-        if (_lastWords.isNotEmpty) {
-          // _showSnackBar(context, "已發送回覆: $_lastWords"); // Removed
-          if (!widget.state.isMuted) {
-            _flutterTts.speak("已發送：$_lastWords");
-          }
-          _lastWords = ''; // Reset
-        } else {
-          if (!widget.state.isMuted) {
-            _flutterTts.speak("未偵測到語音，已取消回覆。");
-          }
-        }
-      } else {
-        debugPrint("The user has denied the use of speech recognition.");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("正在聆聽回覆..."),
+          duration: Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+        ));
       }
+      _speech.listen(
+        onResult: (result) {
+          if (result.finalResult) {
+            debugPrint("Reply: ${result.recognizedWords}");
+            // Simulate sending
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text("已回覆: ${result.recognizedWords}"),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+              ));
+            }
+          }
+        },
+        listenFor: const Duration(seconds: 5),
+        localeId: locale.localeId,
+      );
     }
   }
 
@@ -581,19 +724,10 @@ class _DriverTripViewState extends State<DriverTripView> {
     );
   }
 
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.accent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
   Widget _buildBottomPanel(BuildContext context, Order order) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -607,132 +741,191 @@ class _DriverTripViewState extends State<DriverTripView> {
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Header: Status & Passenger
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
+      child: GestureDetector(
+        onVerticalDragEnd: (details) {
+          if (details.primaryVelocity! < 0) {
+            // Swipe Up
+            setState(() => _isPanelExpanded = true);
+          } else if (details.primaryVelocity! > 0) {
+            // Swipe Down
+            setState(() => _isPanelExpanded = false);
+          }
+        },
+        onTap: () {
+          if (!_isPanelExpanded) setState(() => _isPanelExpanded = true);
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryLight.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    order.passenger.avatarEmoji,
-                    style: const TextStyle(fontSize: 24),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.state.status.displayName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    Text(
-                      widget.state.status == DriverStatus.toPickup
-                          ? '前往 ${order.pickupAddress}'
-                          : widget.state.status == DriverStatus.arrived
-                              ? '等待乘客上車...'
-                              : '前往 ${order.destinationAddress}',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      maxLines: 1,
-                    ),
-                  ],
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Phone Button
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.phone,
-                          color: AppColors.success, size: 20),
-                      onPressed: () => _showSnackBar(context, '撥打電話功能開發中'),
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 40, minHeight: 40),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Chat Button
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.chat_bubble_outline,
-                          color: AppColors.primary, size: 20),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const DriverChatPage()),
-                        );
-                      },
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 40, minHeight: 40),
-                    ),
-                  ),
-                  // Debug/Simulate Button (Tiny, for demo) removed
-                ],
-              ),
-            ],
-          ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(height: 1),
-          ),
-
-          // Action Button
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton(
-              onPressed: () => _handleAction(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 0,
-              ),
-              child: Text(
-                _getActionButtonLabel(),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+
+            // Header (Always Visible)
+            Row(
+              children: [
+                Text(
+                  _getPanelTitle(),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                if (!_isPanelExpanded)
+                  const Icon(Icons.keyboard_arrow_up,
+                      color: AppColors.textSecondary),
+              ],
+            ),
+
+            // Expanded Content
+            if (_isPanelExpanded) ...[
+              const SizedBox(height: 20),
+              // Passenger Info
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        order.passenger.avatarEmoji,
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.passenger.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          widget.state.status == DriverStatus.toPickup
+                              ? order.pickupAddress
+                              : order.destinationAddress,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          maxLines: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Buttons
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildCircleButton(
+                        icon: Icons.phone,
+                        color: AppColors.success,
+                        onTap: () {},
+                      ),
+                      const SizedBox(width: 12),
+                      _buildCircleButton(
+                        icon: Icons.chat_bubble_outline,
+                        color: AppColors.primary,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const DriverChatPage()),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Divider(height: 1),
+              ),
+              // Main Action Button
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () => _handleAction(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    _getActionButtonLabel(),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildCircleButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        shape: BoxShape.circle,
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: color, size: 20),
+        onPressed: onTap,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      ),
+    );
+  }
+
+  String _getPanelTitle() {
+    switch (widget.state.status) {
+      case DriverStatus.toPickup:
+        return '前往接載乘客';
+      case DriverStatus.arrived:
+        return '等待乘客上車';
+      case DriverStatus.inTrip:
+        return '前往目的地';
+      default:
+        return '行程中';
+    }
   }
 
   String _getActionButtonLabel() {
@@ -751,10 +944,9 @@ class _DriverTripViewState extends State<DriverTripView> {
   void _handleAction(BuildContext context) {
     if (widget.state.status == DriverStatus.toPickup) {
       context.read<DriverBloc>().arrivedAtPickup();
-      _showSnackBar(context, '已到達上車點');
     } else if (widget.state.status == DriverStatus.arrived) {
       context.read<DriverBloc>().startTrip();
-      _showSnackBar(context, '行程開始');
+      setState(() => _isPanelExpanded = false); // Auto collapse on start trip
     } else if (widget.state.status == DriverStatus.inTrip) {
       context.read<DriverBloc>().completeTrip();
     }
