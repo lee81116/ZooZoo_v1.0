@@ -36,6 +36,10 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   PolylineAnnotationManager? _polylineAnnotationManager;
   AnimationController? _timerController;
 
+  // Draggable Avatar Position
+  double _avatarLeft = 20.0;
+  double _avatarBottom = 120.0;
+
   @override
   void initState() {
     super.initState();
@@ -97,9 +101,17 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
 
           // 3. Avatar & Tips (Bottom Left)
           Positioned(
-            left: 20,
-            bottom: 120, // Above the bottom panel
-            child: _buildAvatarWithBubble(),
+            left: _avatarLeft,
+            bottom: _avatarBottom,
+            child: GestureDetector(
+              onPanUpdate: (details) {
+                setState(() {
+                  _avatarLeft += details.delta.dx;
+                  _avatarBottom -= details.delta.dy;
+                });
+              },
+              child: _buildAvatarWithBubble(),
+            ),
           ),
         ],
       ),
@@ -114,6 +126,13 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
       ),
       onMapCreated: (MapboxMap mapboxMap) {
         _mapboxMap = mapboxMap;
+
+        // Hide Mapbox UI Elements
+        _mapboxMap?.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
+        _mapboxMap?.logo
+            .updateSettings(LogoSettings(enabled: false)); // Hide Logo
+        _mapboxMap?.attribution.updateSettings(
+            AttributionSettings(enabled: false)); // Hide Attribution Button
 
         // 1. Configure Native Location Puck (Arrow/Bearing)
         _mapboxMap?.location.updateSettings(
@@ -298,46 +317,76 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('新訂單！距離 ${order.distance.toStringAsFixed(1)} km',
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(order.pickupAddress,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center),
           const SizedBox(height: 8),
-          Text('${order.estimatedMinutes} 分鐘後到達上車點',
-              style: const TextStyle(color: AppColors.textSecondary)),
+          Text(
+              '距離 ${order.distance.toStringAsFixed(1)} km  車程約 ${order.estimatedMinutes} 分鐘',
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 16)),
           const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    context.read<DriverBloc>().rejectOrder();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                child: AspectRatio(
+                  aspectRatio: 1.0,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      context.read<DriverBloc>().rejectOrder();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24)),
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.close_rounded,
+                            size: 48, color: Colors.white),
+                        SizedBox(height: 8),
+                        Text('拒絕',
+                            style: TextStyle(
+                                fontSize: 20,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
-                  child: const Text('拒絕',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    context.read<DriverBloc>().acceptOrder();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                child: AspectRatio(
+                  aspectRatio: 1.0,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      context.read<DriverBloc>().acceptOrder();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24)),
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.check_rounded,
+                            size: 48, color: Colors.white),
+                        SizedBox(height: 8),
+                        Text('接受',
+                            style: TextStyle(
+                                fontSize: 20,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
-                  child: const Text('接受訂單',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -353,20 +402,39 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
     return AnimatedBuilder(
       animation: _timerController!,
       builder: (context, child) {
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          height: 6,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: 1.0 - _timerController!.value, // Count down
-              backgroundColor: Colors.white.withOpacity(0.3),
-              valueColor: AlwaysStoppedAnimation(
-                Color.lerp(Colors.green, Colors.red,
-                    _timerController!.value)!, // Green -> Red
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              height: 12,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: 1.0 - _timerController!.value, // Count down
+                  backgroundColor: Colors.white.withOpacity(0.3),
+                  valueColor: AlwaysStoppedAnimation(
+                    Color.lerp(Colors.green, Colors.red,
+                        _timerController!.value)!, // Green -> Red
+                  ),
+                ),
               ),
             ),
-          ),
+            Text(
+              '${((1.0 - _timerController!.value) * 10).ceil()}秒後自動拒絕',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                shadows: [
+                  Shadow(
+                    color: Colors.black,
+                    blurRadius: 4,
+                  )
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
@@ -376,6 +444,13 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
     final double targetAmount = state.dailyEarningsGoal.toDouble();
     final double progress =
         (state.todayEarnings / targetAmount).clamp(0.0, 1.0);
+
+    // Calculate duration
+    String durationText = '0h 0m';
+    if (state.onlineSince != null) {
+      final duration = DateTime.now().difference(state.onlineSince!);
+      durationText = '${duration.inHours}h ${duration.inMinutes % 60}m';
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -388,47 +463,85 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
             borderRadius: BorderRadius.circular(2),
             child: LinearProgressIndicator(
               value: progress,
-              backgroundColor: Colors.white.withOpacity(0.2),
+              backgroundColor: Colors.white.withValues(alpha: 0.2),
               valueColor: const AlwaysStoppedAnimation(AppColors.warning),
             ),
           ),
         ),
-        // Floating Earnings Pill
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E2C).withOpacity(0.9), // Dark control bg
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
+
+        // Info Row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.currency_yen,
-                  color: AppColors.warning, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                '今日已賺',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 14,
+              // Left: Earnings
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E2C).withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(30),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.currency_yen,
+                        color: AppColors.warning, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      '\$${state.todayEarnings}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                '\$${state.todayEarnings}',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
+
+              // Right: Online Time
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E2C).withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(30),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.timer_outlined,
+                        color: AppColors.textSecondary, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      durationText,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
