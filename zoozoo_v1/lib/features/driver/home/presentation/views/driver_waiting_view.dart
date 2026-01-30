@@ -42,10 +42,6 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   double _avatarBottom = 120.0;
   bool _isAvatarDragging = false;
 
-  // Feedback Message
-  String _feedbackMessage = '';
-  Timer? _feedbackTimer;
-
   @override
   void initState() {
     super.initState();
@@ -100,24 +96,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 if (widget.state.status == DriverStatus.hasOrder)
                   _buildNewOrderUI(widget.state.currentOrder!)
                 else ...[
-                  if (_feedbackMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        _feedbackMessage,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black,
-                              blurRadius: 4,
-                            )
-                          ],
-                        ),
-                      ),
-                    ),
+                  // Feedback message removed
                   _buildDrivingModeSelector(widget.state), // New Selector
                   const SizedBox(height: 12),
                   _buildFloatingBottomPanel(widget.state),
@@ -937,8 +916,6 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 isActive: !state.isMuted,
                 onTap: () {
                   context.read<DriverBloc>().toggleMute();
-                  _showFeedback(
-                      '語音播報已${!state.isMuted ? "停用" : "啟用"}'); // Note: logic is inverted because we act on *current* state before update propagates, or we can just say 'switched'. Actually, let's use the inverted value of current state to predict result.
                 },
               ),
               const SizedBox(width: 12),
@@ -949,8 +926,6 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 isActive: state.chatVoiceEnabledSafe,
                 onTap: () {
                   context.read<DriverBloc>().toggleChatVoiceReply();
-                  _showFeedback(
-                      '聊天語音回覆功能已${state.chatVoiceEnabledSafe ? "停用" : "啟用"}');
                 },
               ),
               const SizedBox(width: 12),
@@ -961,8 +936,6 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 isActive: state.areNotificationsEnabled,
                 onTap: () {
                   context.read<DriverBloc>().toggleNotifications();
-                  _showFeedback(
-                      '背景模式已${state.areNotificationsEnabled ? "停用" : "啟用"}');
                 },
               ),
             ],
@@ -981,7 +954,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 onTap: () {
                   // Simple tap for now, can be long press
                   context.read<DriverBloc>().goOffline();
-                  _showSnackBar(context, '已下線休息');
+                  // SnackBar removed
                 },
                 borderRadius: BorderRadius.circular(24),
                 child: Padding(
@@ -1038,37 +1011,12 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
     );
   }
 
-  void _showFeedback(String message) {
-    _feedbackTimer?.cancel();
-    setState(() {
-      _feedbackMessage = message;
-    });
-    _feedbackTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _feedbackMessage = '';
-        });
-      }
-    });
-  }
-
   void _showProfilePage(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => const DriverProfileSheet(),
-    );
-  }
-
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.accent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
     );
   }
 }

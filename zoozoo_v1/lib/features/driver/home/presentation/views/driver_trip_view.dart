@@ -78,10 +78,7 @@ class _DriverTripViewState extends State<DriverTripView> {
     super.initState();
     _initVoiceServices();
 
-    // Simulate a message after 3 seconds for demo purposes
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) _simulateIncomingMessage();
-    });
+    // Removed simulation
   }
 
   Future<void> _initVoiceServices() async {
@@ -520,11 +517,7 @@ class _DriverTripViewState extends State<DriverTripView> {
 
   // --- Voice & Message Logic ---
 
-  void _simulateIncomingMessage() {
-    const message = "司機你好，我大概五分鐘後到";
-    _showSnackBar(context, "收到乘客訊息: $message");
-    _speakAndListen(message);
-  }
+  // --- Voice & Message Logic ---
 
   Future<void> _speakAndListen(String message) async {
     // 1. Speak (if Voice Broadcast is enabled)
@@ -541,7 +534,7 @@ class _DriverTripViewState extends State<DriverTripView> {
       if (available) {
         if (!mounted) return;
         setState(() => _isListening = true);
-        _showSnackBar(context, "正在錄音回覆 (5秒)...");
+        // _showSnackBar(context, "正在錄音回覆 (5秒)..."); // Removed
 
         await _speech.listen(
           onResult: (result) {
@@ -561,7 +554,7 @@ class _DriverTripViewState extends State<DriverTripView> {
 
         // 3. Send Reply
         if (_lastWords.isNotEmpty) {
-          _showSnackBar(context, "已發送回覆: $_lastWords");
+          // _showSnackBar(context, "已發送回覆: $_lastWords"); // Removed
           if (!widget.state.isMuted) {
             _flutterTts.speak("已發送：$_lastWords");
           }
@@ -703,19 +696,7 @@ class _DriverTripViewState extends State<DriverTripView> {
                           const BoxConstraints(minWidth: 40, minHeight: 40),
                     ),
                   ),
-                  // Debug/Simulate Button (Tiny, for demo)
-                  GestureDetector(
-                    onLongPress: _simulateIncomingMessage,
-                    child: Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      width: 20,
-                      height: 20,
-                      color: Colors.transparent,
-                      child: const Center(
-                          child: Icon(Icons.bug_report,
-                              size: 12, color: Colors.grey)),
-                    ),
-                  ),
+                  // Debug/Simulate Button (Tiny, for demo) removed
                 ],
               ),
             ],
