@@ -17,7 +17,7 @@ class DriverBloc extends ChangeNotifier {
   final OrderStorageService _storageService;
   final VoiceAssistantService _voiceService;
   final NotificationService _notificationService;
-  
+
   DriverState _state = const DriverState();
   StreamSubscription<Order>? _orderSubscription;
   StreamSubscription<Position>? _locationSubscription;
@@ -57,7 +57,7 @@ class DriverBloc extends ChangeNotifier {
     _stopLocationUpdates();
     _orderService.pause();
     _voiceService.stopSpeaking();
-    
+
     _state = _state.copyWith(
       status: DriverStatus.offline,
       clearOrder: true,
@@ -74,7 +74,30 @@ class DriverBloc extends ChangeNotifier {
 
   /// Toggle notification status
   void toggleNotifications() {
-    _state = _state.copyWith(areNotificationsEnabled: !_state.areNotificationsEnabled);
+    _state = _state.copyWith(
+        areNotificationsEnabled: !_state.areNotificationsEnabled);
+    notifyListeners();
+  }
+
+  /// Toggle chat voice reply status
+  void toggleChatVoiceReply() {
+    _state =
+        _state.copyWith(isChatVoiceReplyEnabled: !_state.chatVoiceEnabledSafe);
+    notifyListeners();
+  }
+
+  /// Toggle driving mode
+  void toggleDrivingMode(DrivingMode mode) {
+    if (mode == DrivingMode.standard) return; // Cannot toggle standard
+
+    final newModes = Set<DrivingMode>.from(_state.activeModesSafe);
+    if (newModes.contains(mode)) {
+      newModes.remove(mode);
+    } else {
+      newModes.add(mode);
+    }
+
+    _state = _state.copyWith(activeDrivingModes: newModes);
     notifyListeners();
   }
 
@@ -97,15 +120,17 @@ class DriverBloc extends ChangeNotifier {
       if (!_state.isMuted) {
         await _voiceService.prepareForBackgroundSpeak();
         // Await speak completion
-        await _voiceService.speak("收到新訂單，從${order.pickupAddress}到${order.destinationAddress}，請問要接單嗎？");
+        await _voiceService.speak(
+            "新訂單，距離${order.distance.toStringAsFixed(1)}公里，約${order.estimatedMinutes}分鐘車程");
       }
 
       // 2. Notification (After voice or immediately if muted)
       if (_state.areNotificationsEnabled) {
         await _notificationService.showOrderNotification(
           id: order.id.hashCode,
-          title: '收到新訂單！',
-          body: '從 ${order.pickupAddress} 到 ${order.destinationAddress}',
+          title: '新訂單',
+          body:
+              '距離${order.distance.toStringAsFixed(1)}km 約${order.estimatedMinutes}分鐘車程',
           payload: order.id,
         );
       }
@@ -200,10 +225,10 @@ class DriverBloc extends ChangeNotifier {
         _state.currentOrder!.id,
         OrderStatus.completed,
       );
-      
+
       // Save to order history
       await _storageService.saveOrder(completedOrder);
-      
+
       _state = _state.copyWith(
         status: DriverStatus.completed,
         currentOrder: completedOrder,
@@ -237,12 +262,14 @@ class DriverBloc extends ChangeNotifier {
     _stopLocationUpdates();
 
     LocationSettings locationSettings;
-    if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
+    if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
       locationSettings = AppleSettings(
         accuracy: LocationAccuracy.best,
         distanceFilter: 10,
         pauseLocationUpdatesAutomatically: false,
-        showBackgroundLocationIndicator: true, // This enables the green bar/pill
+        showBackgroundLocationIndicator:
+            true, // This enables the green bar/pill
       );
     } else {
       locationSettings = const LocationSettings(
@@ -251,10 +278,12 @@ class DriverBloc extends ChangeNotifier {
       );
     }
 
-    _locationSubscription = Geolocator.getPositionStream(locationSettings: locationSettings)
-        .listen((Position position) {
+    _locationSubscription =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+            (Position position) {
       // Keep alive logic
-      debugPrint('[Location Update] Lat: ${position.latitude}, Lng: ${position.longitude}');
+      debugPrint(
+          '[Location Update] Lat: ${position.latitude}, Lng: ${position.longitude}');
     }, onError: (e) {
       debugPrint('[Location Error] $e');
     });
