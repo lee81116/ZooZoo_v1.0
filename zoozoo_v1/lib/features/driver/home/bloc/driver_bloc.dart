@@ -121,15 +121,16 @@ class DriverBloc extends ChangeNotifier {
         await _voiceService.prepareForBackgroundSpeak();
         // Await speak completion
         await _voiceService.speak(
-            "收到新訂單，從${order.pickupAddress}到${order.destinationAddress}，請問要接單嗎？");
+            "新訂單，距離${order.distance.toStringAsFixed(1)}公里，約${order.estimatedMinutes}分鐘車程");
       }
 
       // 2. Notification (After voice or immediately if muted)
       if (_state.areNotificationsEnabled) {
         await _notificationService.showOrderNotification(
           id: order.id.hashCode,
-          title: '收到新訂單！',
-          body: '從 ${order.pickupAddress} 到 ${order.destinationAddress}',
+          title: '新訂單',
+          body:
+              '距離${order.distance.toStringAsFixed(1)}km 約${order.estimatedMinutes}分鐘車程',
           payload: order.id,
         );
       }
