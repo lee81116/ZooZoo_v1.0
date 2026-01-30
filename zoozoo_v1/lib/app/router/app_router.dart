@@ -5,11 +5,11 @@ import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/auth/presentation/pages/splash_page.dart';
 import '../../features/passenger/home/presentation/pages/passenger_main_page.dart';
 import '../../features/passenger/home/presentation/pages/passenger_3d_map_page.dart';
-import '../../core/services/map/map_models.dart';
-import '../../features/passenger/booking/presentation/pages/booking_map_page.dart';
+import '../../features/passenger/settings/presentation/pages/passenger_settings_page.dart';
 import '../../features/passenger/booking/presentation/pages/booking_map_page.dart';
 import '../../features/driver/home/presentation/pages/driver_main_page.dart';
 import '../../features/driver/financial/presentation/pages/financial_planner_page.dart';
+import '../../core/services/map/map_models.dart';
 
 /// Route path constants
 abstract class Routes {
@@ -20,6 +20,7 @@ abstract class Routes {
   static const String passengerHome = '/passenger';
   static const String passengerBooking = '/passenger/booking';
   static const String passenger3DMap = '/passenger/3d-map';
+  static const String passengerSettings = '/passenger/settings';
   static const String driverHome = '/driver';
   static const String financialPlanner = '/driver/financial';
 }
@@ -57,18 +58,33 @@ final appRouter = GoRouter(
       builder: (context, state) => const _PlaceholderPage(title: '司機註冊'),
     ),
 
-    // Passenger Home - with swipeable pages
+    // Passenger Home
     GoRoute(
       path: Routes.passengerHome,
       name: 'passengerHome',
       builder: (context, state) => const PassengerMainPage(),
     ),
 
-    // Passenger Booking - map and vehicle selection
+    // Passenger Settings
+    GoRoute(
+      path: Routes.passengerSettings,
+      name: 'passengerSettings',
+      builder: (context, state) => const PassengerSettingsPage(),
+    ),
+
+    // Passenger Booking - waiting for driver
     GoRoute(
       path: Routes.passengerBooking,
       name: 'passengerBooking',
-      builder: (context, state) => const BookingMapPage(),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return BookingMapPage(
+          userLocation: extra?['userLocation'] as AppLatLng?,
+          destinationLocation: extra?['destinationLocation'] as AppLatLng?,
+          vehicleType: extra?['vehicleType'] as String?,
+          price: extra?['price'] as int?,
+        );
+      },
     ),
 
     // Passenger 3D Map with simulation
@@ -86,7 +102,7 @@ final appRouter = GoRouter(
       },
     ),
 
-    // Driver Home - with swipeable pages
+    // Driver Home
     GoRoute(
       path: Routes.driverHome,
       name: 'driverHome',
