@@ -153,6 +153,16 @@ class _DriverTripViewState extends State<DriverTripView> {
     // Set Token
     MapboxOptions.setAccessToken(_accessToken);
 
+    // Hide Mapbox UI Elements
+    try {
+      await mapboxMap.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
+      await mapboxMap.logo.updateSettings(LogoSettings(enabled: false));
+      await mapboxMap.attribution
+          .updateSettings(AttributionSettings(enabled: false));
+    } catch (e) {
+      debugPrint("Error hiding Mapbox UI: $e");
+    }
+
     // 1. Setup Lighting
     await _setupLighting();
 
