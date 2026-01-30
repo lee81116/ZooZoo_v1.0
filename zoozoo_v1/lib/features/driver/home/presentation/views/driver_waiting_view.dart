@@ -1,3 +1,4 @@
+import 'dart:async'; // Add this for Timer
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -39,6 +40,10 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   // Draggable Avatar Position
   double _avatarLeft = 20.0;
   double _avatarBottom = 120.0;
+
+  // Feedback Message
+  String _feedbackMessage = '';
+  Timer? _feedbackTimer;
 
   @override
   void initState() {
@@ -93,8 +98,27 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 const Spacer(),
                 if (widget.state.status == DriverStatus.hasOrder)
                   _buildNewOrderUI(widget.state.currentOrder!)
-                else
+                else ...[
+                  if (_feedbackMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        _feedbackMessage,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black,
+                              blurRadius: 4,
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
                   _buildFloatingBottomPanel(widget.state),
+                ],
               ],
             ),
           ),
@@ -625,7 +649,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -634,22 +658,42 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Modes
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Left: Toggle Buttons
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                '接單模式',
-                style: TextStyle(fontSize: 10, color: AppColors.textHint),
+              _buildToggleButton(
+                icon: !state.isMuted ? Icons.volume_up : Icons.volume_off,
+                isActive: !state.isMuted,
+                onTap: () {
+                  context.read<DriverBloc>().toggleMute();
+                  _showFeedback(
+                      '語音播報已${!state.isMuted ? "停用" : "啟用"}'); // Note: logic is inverted because we act on *current* state before update propagates, or we can just say 'switched'. Actually, let's use the inverted value of current state to predict result.
+                },
               ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  _buildModeChip('標準', true),
-                  const SizedBox(width: 8),
-                  _buildModeChip('安靜', false),
-                ],
+              const SizedBox(width: 12),
+              _buildToggleButton(
+                icon: state.chatVoiceEnabledSafe
+                    ? Icons.record_voice_over
+                    : Icons.voice_over_off,
+                isActive: state.chatVoiceEnabledSafe,
+                onTap: () {
+                  context.read<DriverBloc>().toggleChatVoiceReply();
+                  _showFeedback(
+                      '聊天語音回覆功能已${state.chatVoiceEnabledSafe ? "停用" : "啟用"}');
+                },
+              ),
+              const SizedBox(width: 12),
+              _buildToggleButton(
+                icon: state.areNotificationsEnabled
+                    ? Icons.layers
+                    : Icons.layers_clear,
+                isActive: state.areNotificationsEnabled,
+                onTap: () {
+                  context.read<DriverBloc>().toggleNotifications();
+                  _showFeedback(
+                      '背景模式已${state.areNotificationsEnabled ? "停用" : "啟用"}');
+                },
               ),
             ],
           ),
@@ -695,25 +739,47 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
     );
   }
 
-  Widget _buildModeChip(String label, bool isActive) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: isActive ? AppColors.accent : AppColors.background,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isActive ? AppColors.accent : AppColors.divider,
+  Widget _buildToggleButton({
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.accent.withValues(alpha: 0.1)
+              : AppColors.background,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isActive ? AppColors.accent : AppColors.divider,
+            width: 1.5,
+          ),
         ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: isActive ? Colors.white : AppColors.textSecondary,
+        child: Icon(
+          icon,
+          color: isActive ? AppColors.accent : AppColors.textHint,
+          size: 24,
         ),
       ),
     );
+  }
+
+  void _showFeedback(String message) {
+    _feedbackTimer?.cancel();
+    setState(() {
+      _feedbackMessage = message;
+    });
+    _feedbackTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _feedbackMessage = '';
+        });
+      }
+    });
   }
 
   void _showProfilePage(BuildContext context) {

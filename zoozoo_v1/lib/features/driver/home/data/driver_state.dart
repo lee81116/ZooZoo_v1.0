@@ -2,13 +2,13 @@ import '../../../../core/models/order_model.dart';
 
 /// Driver status enum
 enum DriverStatus {
-  offline,    // 下線
-  online,     // 上線等待中
-  hasOrder,   // 收到訂單（待決定）
-  toPickup,   // 已接單，前往接客
-  arrived,    // 已到達上車點
-  inTrip,     // 行程進行中
-  completed,  // 行程完成（顯示結算）
+  offline, // 下線
+  online, // 上線等待中
+  hasOrder, // 收到訂單（待決定）
+  toPickup, // 已接單，前往接客
+  arrived, // 已到達上車點
+  inTrip, // 行程進行中
+  completed, // 行程完成（顯示結算）
 }
 
 /// Extension for DriverStatus
@@ -53,6 +53,9 @@ class DriverState {
   final int dailyEarningsGoal;
   final bool isMuted;
   final bool areNotificationsEnabled;
+  final bool? isChatVoiceReplyEnabled; // Nullable for hot reload safety
+
+  bool get chatVoiceEnabledSafe => isChatVoiceReplyEnabled ?? true;
 
   const DriverState({
     this.status = DriverStatus.offline,
@@ -63,6 +66,7 @@ class DriverState {
     this.dailyEarningsGoal = 500,
     this.isMuted = false,
     this.areNotificationsEnabled = true,
+    this.isChatVoiceReplyEnabled = true,
   });
 
   DriverState copyWith({
@@ -76,6 +80,7 @@ class DriverState {
     int? dailyEarningsGoal,
     bool? isMuted,
     bool? areNotificationsEnabled,
+    bool? isChatVoiceReplyEnabled,
   }) {
     return DriverState(
       status: status ?? this.status,
@@ -85,7 +90,10 @@ class DriverState {
       todayEarnings: todayEarnings ?? this.todayEarnings,
       dailyEarningsGoal: dailyEarningsGoal ?? this.dailyEarningsGoal,
       isMuted: isMuted ?? this.isMuted,
-      areNotificationsEnabled: areNotificationsEnabled ?? this.areNotificationsEnabled,
+      areNotificationsEnabled:
+          areNotificationsEnabled ?? this.areNotificationsEnabled,
+      isChatVoiceReplyEnabled:
+          isChatVoiceReplyEnabled ?? this.isChatVoiceReplyEnabled,
     );
   }
 

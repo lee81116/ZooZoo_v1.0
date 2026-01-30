@@ -14,7 +14,7 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import '../pages/driver_chat_page.dart';  // Import the chat page
+import '../pages/driver_chat_page.dart'; // Import the chat page
 
 import '../../../../../core/models/order_model.dart';
 import '../../../../../core/theme/app_colors.dart';
@@ -37,13 +37,14 @@ class DriverTripView extends StatefulWidget {
 
 class _DriverTripViewState extends State<DriverTripView> {
   MapboxMap? _mapboxMap;
-  
+
   // Annotation Managers (still useful for Destination/Pickup markers)
   CircleAnnotationManager? _circleAnnotationManager;
   PointAnnotationManager? _carAnnotationManager; // Fallback icon
   PointAnnotation? _carAnnotation;
 
-  static const String _accessToken = 'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g';
+  static const String _accessToken =
+      'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g';
 
   // --- 3D Model & Style Config (From Passenger Page) ---
   static const _carModelAssetPath = 'assets/3dmodels/base_basic_pbr.glb';
@@ -56,7 +57,7 @@ class _DriverTripViewState extends State<DriverTripView> {
   static const _routeColor = Color(0xFFADD8E6); // Light Blue
 
   bool _using3DCarModel = false;
-  
+
   // Smooth rotation tracking
   double _currentBearing = 0.0;
   double _cameraBearing = 0.0;
@@ -76,7 +77,7 @@ class _DriverTripViewState extends State<DriverTripView> {
   void initState() {
     super.initState();
     _initVoiceServices();
-    
+
     // Simulate a message after 3 seconds for demo purposes
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) _simulateIncomingMessage();
@@ -92,7 +93,7 @@ class _DriverTripViewState extends State<DriverTripView> {
   @override
   void didUpdateWidget(DriverTripView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.state.status != oldWidget.state.status || 
+    if (widget.state.status != oldWidget.state.status ||
         widget.state.currentOrder?.id != oldWidget.state.currentOrder?.id) {
       _updateRoute();
     }
@@ -148,7 +149,7 @@ class _DriverTripViewState extends State<DriverTripView> {
 
   void _onMapCreated(MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
-    
+
     // Set Token
     MapboxOptions.setAccessToken(_accessToken);
 
@@ -156,17 +157,18 @@ class _DriverTripViewState extends State<DriverTripView> {
     await _setupLighting();
 
     // 2. Setup Annotation Managers (for Pickup/Dropoff markers)
-    _circleAnnotationManager = await mapboxMap.annotations.createCircleAnnotationManager();
-    
+    _circleAnnotationManager =
+        await mapboxMap.annotations.createCircleAnnotationManager();
+
     // 3. Setup Route Layer (Empty initially)
     await _setupRouteLayer();
 
     // 4. Setup Car (3D Model or Icon)
     await _setupCarLayer();
-    
+
     // 5. Initial Camera Center & Start Tracking
     await _centerCameraOnUser();
-    
+
     // 6. Draw Route if needed
     _updateRoute();
   }
@@ -174,9 +176,8 @@ class _DriverTripViewState extends State<DriverTripView> {
   Future<void> _setupLighting() async {
     if (_mapboxMap == null) return;
     try {
-      await _mapboxMap!.style.setStyleImportConfigProperty(
-        "basemap", "lightPreset", "dusk"
-      );
+      await _mapboxMap!.style
+          .setStyleImportConfigProperty("basemap", "lightPreset", "dusk");
     } catch (e) {
       debugPrint("Failed to set lighting: $e");
     }
@@ -189,7 +190,7 @@ class _DriverTripViewState extends State<DriverTripView> {
       await _mapboxMap!.style.addSource(
         GeoJsonSource(id: _routeSourceId, data: jsonEncode(geoJson)),
       );
-      
+
       await _mapboxMap!.style.addLayer(
         LineLayer(
           id: _routeLayerId,
@@ -198,7 +199,7 @@ class _DriverTripViewState extends State<DriverTripView> {
           lineWidth: 10.0,
           lineCap: LineCap.ROUND,
           lineJoin: LineJoin.ROUND,
-          lineEmissiveStrength: 1.0, 
+          lineEmissiveStrength: 1.0,
         ),
       );
     } catch (e) {
@@ -209,22 +210,23 @@ class _DriverTripViewState extends State<DriverTripView> {
   Future<void> _setupCarLayer() async {
     // 1. Try 3D Model
     await _trySetup3DCarModel();
-    
+
     // 2. Setup Fallback Icon (always good to have or if 3D fails)
     if (!_using3DCarModel) {
-       await _setupCarIconMarker();
+      await _setupCarIconMarker();
     }
   }
 
   Future<void> _trySetup3DCarModel() async {
     if (_mapboxMap == null) return;
     try {
-      final modelUri = await _loadModelToTempFile(_carModelAssetPath, 'car.glb');
+      final modelUri =
+          await _loadModelToTempFile(_carModelAssetPath, 'car.glb');
       await _mapboxMap!.style.addStyleModel(_carModelId, modelUri);
 
       // Dummy initial position
       final geoJson = _createPointGeoJson(Position(121.5, 25.0), 0);
-      
+
       await _mapboxMap!.style.addSource(
         GeoJsonSource(id: _carSourceId, data: jsonEncode(geoJson)),
       );
@@ -243,11 +245,10 @@ class _DriverTripViewState extends State<DriverTripView> {
       // Enable Animation
       try {
         await _mapboxMap!.style.setStyleLayerProperty(
-          _carLayerId, 'model-animation-enabled', true
-        );
-         await _mapboxMap!.style.setStyleLayerProperty(
-          _carLayerId, 'model-animation', 'running' // Default animation
-        );
+            _carLayerId, 'model-animation-enabled', true);
+        await _mapboxMap!.style.setStyleLayerProperty(
+            _carLayerId, 'model-animation', 'running' // Default animation
+            );
       } catch (_) {}
 
       _using3DCarModel = true;
@@ -258,15 +259,18 @@ class _DriverTripViewState extends State<DriverTripView> {
   }
 
   Future<void> _setupCarIconMarker() async {
-     try {
-      final ByteData bytes = await rootBundle.load('assets/images/vehicles/dog.png');
+    try {
+      final ByteData bytes =
+          await rootBundle.load('assets/images/vehicles/dog.png');
       final Uint8List list = bytes.buffer.asUint8List();
-      await _mapboxMap!.style.addStyleImage('car-icon', 3.0, MbxImage(width: 100, height: 100, data: list), false, [], [], null);
-      
-      _carAnnotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
-     } catch (e) {
-       debugPrint("Icon setup failed: $e");
-     }
+      await _mapboxMap!.style.addStyleImage('car-icon', 3.0,
+          MbxImage(width: 100, height: 100, data: list), false, [], [], null);
+
+      _carAnnotationManager =
+          await _mapboxMap!.annotations.createPointAnnotationManager();
+    } catch (e) {
+      debugPrint("Icon setup failed: $e");
+    }
   }
 
   // --- Logic ---
@@ -282,10 +286,12 @@ class _DriverTripViewState extends State<DriverTripView> {
     // 1. Determine Target & Show Marker
     Position? targetPos;
     if (widget.state.status == DriverStatus.toPickup) {
-      targetPos = Position(order.pickupLocation.longitude, order.pickupLocation.latitude);
+      targetPos = Position(
+          order.pickupLocation.longitude, order.pickupLocation.latitude);
       await _addCircleMarker(targetPos, Colors.green); // Green for Pickup
     } else if (widget.state.status == DriverStatus.inTrip) {
-      targetPos = Position(order.destinationLocation.longitude, order.destinationLocation.latitude);
+      targetPos = Position(order.destinationLocation.longitude,
+          order.destinationLocation.latitude);
       await _addCircleMarker(targetPos, Colors.red); // Red for Destination
     }
 
@@ -295,20 +301,19 @@ class _DriverTripViewState extends State<DriverTripView> {
     try {
       final currentPos = await geo.Geolocator.getCurrentPosition();
       final startPos = Position(currentPos.longitude, currentPos.latitude);
-      
+
       final routeGeometry = await _fetchRouteGeometry(startPos, targetPos);
-      
+
       // 3. Update Route Layer
       if (routeGeometry.isNotEmpty) {
         final geoJson = _createLineGeoJson(routeGeometry);
-         await _mapboxMap!.style.setStyleSourceProperty(
-          _routeSourceId, "data", jsonEncode(geoJson)
-        );
+        await _mapboxMap!.style.setStyleSourceProperty(
+            _routeSourceId, "data", jsonEncode(geoJson));
       }
 
       // 4. Start Navigation Loop
-      _startMockNavigationLoop(startPos); // Using "Mock" naming but it's real loc loop now
-
+      _startMockNavigationLoop(
+          startPos); // Using "Mock" naming but it's real loc loop now
     } catch (e) {
       debugPrint("Error updating route: $e");
     }
@@ -316,66 +321,71 @@ class _DriverTripViewState extends State<DriverTripView> {
 
   void _startMockNavigationLoop(Position startPos) {
     _positionStream?.cancel();
-    
+
     // Continuous Tracking
     const locationSettings = geo.LocationSettings(
       accuracy: geo.LocationAccuracy.bestForNavigation,
-      distanceFilter: 2, 
+      distanceFilter: 2,
     );
 
     // Initial positioning
-    _updateCarVisuals(startPos, 0, startPos.lat.toDouble(), startPos.lng.toDouble());
+    _updateCarVisuals(
+        startPos, 0, startPos.lat.toDouble(), startPos.lng.toDouble());
 
-    _positionStream = geo.Geolocator.getPositionStream(locationSettings: locationSettings)
-      .listen((pos) {
-         if (!mounted) return;
-         _handleLocationUpdate(pos);
+    _positionStream =
+        geo.Geolocator.getPositionStream(locationSettings: locationSettings)
+            .listen((pos) {
+      if (!mounted) return;
+      _handleLocationUpdate(pos);
     });
   }
 
   void _handleLocationUpdate(geo.Position pos) {
     // 1. Calculate Bearings
-    double targetBearing = pos.heading; // Device heading often noisy, but okay for real driving
-    
+    double targetBearing =
+        pos.heading; // Device heading often noisy, but okay for real driving
+
     // Only update bearing if moving (speed > 1 m/s approx 3.6 km/h) to avoid spinning at lights
     if (pos.speed < 1.0) {
-       targetBearing = _currentBearing; 
+      targetBearing = _currentBearing;
     }
 
     // Smooth model bearing
-    _currentBearing = _lerpBearing(_currentBearing, targetBearing, _bearingSmoothFactor);
-    
+    _currentBearing =
+        _lerpBearing(_currentBearing, targetBearing, _bearingSmoothFactor);
+
     // Smooth camera bearing (lag)
-    _cameraBearing = _lerpBearing(_cameraBearing, _currentBearing, _cameraSmoothFactor);
+    _cameraBearing =
+        _lerpBearing(_cameraBearing, _currentBearing, _cameraSmoothFactor);
 
     // 2. Update Visuals
     final currentPos = Position(pos.longitude, pos.latitude);
     _updateCarVisuals(currentPos, _currentBearing, pos.latitude, pos.longitude);
   }
 
-  Future<void> _updateCarVisuals(Position pos, double bearing, double lat, double lng) async {
+  Future<void> _updateCarVisuals(
+      Position pos, double bearing, double lat, double lng) async {
     if (_mapboxMap == null) return;
 
     // A. Update 3D Model
     if (_using3DCarModel) {
-       final geoJson = _createPointGeoJson(pos, bearing);
-       await _mapboxMap!.style.setStyleSourceProperty(
-         _carSourceId, 'data', jsonEncode(geoJson)
-       );
-       await _mapboxMap!.style.setStyleLayerProperty(
-         _carLayerId, 'model-rotation', [0.0, 0.0, bearing + _modelCalibration]
-       );
-    } 
+      final geoJson = _createPointGeoJson(pos, bearing);
+      await _mapboxMap!.style
+          .setStyleSourceProperty(_carSourceId, 'data', jsonEncode(geoJson));
+      await _mapboxMap!.style.setStyleLayerProperty(_carLayerId,
+          'model-rotation', [0.0, 0.0, bearing + _modelCalibration]);
+    }
     // B. Update Icon (Fallback)
     else if (_carAnnotationManager != null) {
-       if (_carAnnotation != null) {
-         await _carAnnotationManager!.delete(_carAnnotation!);
-       }
-       _carAnnotation = await _carAnnotationManager!.create(PointAnnotationOptions(
-         geometry: Point(coordinates: pos),
-         iconImage: 'car-icon',
-         iconRotate: bearing,
-       ));
+      if (_carAnnotation != null) {
+        await _carAnnotationManager!.delete(_carAnnotation!);
+      }
+      _carAnnotation =
+          await _carAnnotationManager!.create(PointAnnotationOptions(
+        geometry: Point(coordinates: pos),
+        iconImage: 'car-icon',
+        iconRotate: bearing,
+      ));
     }
 
     // C. Update Camera
@@ -384,10 +394,9 @@ class _DriverTripViewState extends State<DriverTripView> {
       zoom: 17.5,
       pitch: 65.0,
       bearing: _cameraBearing, // Use lagged camera bearing
-       padding: MbxEdgeInsets(top: 0, left: 0, bottom: 200, right: 0),
+      padding: MbxEdgeInsets(top: 0, left: 0, bottom: 200, right: 0),
     ));
   }
-
 
   // --- Helpers ---
 
@@ -399,66 +408,79 @@ class _DriverTripViewState extends State<DriverTripView> {
     return 'file://${file.path}';
   }
 
-  Future<List<List<double>>> _fetchRouteGeometry(Position start, Position end) async {
-     // Fetch from Mapbox Directions API
-     final client = HttpClient();
-     try {
-       final url = Uri.parse(
-         'https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&access_token=$_accessToken'
-       );
-       final request = await client.getUrl(url);
-       final response = await request.close();
-       if (response.statusCode == 200) {
-         final jsonString = await response.transform(utf8.decoder).join();
-         final data = jsonDecode(jsonString);
-         final routes = data['routes'] as List;
-         if (routes.isNotEmpty) {
-           final geometry = routes[0]['geometry'];
-           final coordinates = geometry['coordinates'] as List;
-           // Convert [lng, lat] dynamic list to double list
-           return coordinates.map<List<double>>((c) => [c[0].toDouble(), c[1].toDouble()]).toList();
-         }
-       }
-     } catch (e) {
-       debugPrint("API Error: $e");
-     }
-     // Fallback straight line
-     return [[start.lng.toDouble(), start.lat.toDouble()], [end.lng.toDouble(), end.lat.toDouble()]];
+  Future<List<List<double>>> _fetchRouteGeometry(
+      Position start, Position end) async {
+    // Fetch from Mapbox Directions API
+    final client = HttpClient();
+    try {
+      final url = Uri.parse(
+          'https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&access_token=$_accessToken');
+      final request = await client.getUrl(url);
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        final jsonString = await response.transform(utf8.decoder).join();
+        final data = jsonDecode(jsonString);
+        final routes = data['routes'] as List;
+        if (routes.isNotEmpty) {
+          final geometry = routes[0]['geometry'];
+          final coordinates = geometry['coordinates'] as List;
+          // Convert [lng, lat] dynamic list to double list
+          return coordinates
+              .map<List<double>>((c) => [c[0].toDouble(), c[1].toDouble()])
+              .toList();
+        }
+      }
+    } catch (e) {
+      debugPrint("API Error: $e");
+    }
+    // Fallback straight line
+    return [
+      [start.lng.toDouble(), start.lat.toDouble()],
+      [end.lng.toDouble(), end.lat.toDouble()]
+    ];
   }
 
   Map<String, dynamic> _createLineGeoJson(List<List<double>> coordinates) {
     return {
       'type': 'FeatureCollection',
-      'features': [{
-        'type': 'Feature',
-        'geometry': { 'type': 'LineString', 'coordinates': coordinates },
-        'properties': {}
-      }]
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {'type': 'LineString', 'coordinates': coordinates},
+          'properties': {}
+        }
+      ]
     };
   }
 
   Map<String, dynamic> _createPointGeoJson(Position pos, double bearing) {
     return {
       'type': 'FeatureCollection',
-      'features': [{
-        'type': 'Feature',
-        'geometry': { 'type': 'Point', 'coordinates': [pos.lng, pos.lat] },
-        'properties': { 'bearing': bearing }
-      }]
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [pos.lng, pos.lat]
+          },
+          'properties': {'bearing': bearing}
+        }
+      ]
     };
   }
 
   double _lerpBearing(double current, double target, double factor) {
     // Normalize to 0-360
-    current = current % 360; 
+    current = current % 360;
     target = target % 360;
     if (current < 0) current += 360;
     if (target < 0) target += 360;
-    
+
     double diff = target - current;
-    if (diff > 180) diff -= 360;
+    if (diff > 180)
+      diff -= 360;
     else if (diff < -180) diff += 360;
-    
+
     double result = current + diff * factor;
     result = result % 360;
     if (result < 0) result += 360;
@@ -480,10 +502,9 @@ class _DriverTripViewState extends State<DriverTripView> {
     try {
       final pos = await geo.Geolocator.getCurrentPosition();
       _mapboxMap?.setCamera(CameraOptions(
-        center: Point(coordinates: Position(pos.longitude, pos.latitude)),
-        zoom: 17.0,
-        pitch: 60.0
-      ));
+          center: Point(coordinates: Position(pos.longitude, pos.latitude)),
+          zoom: 17.0,
+          pitch: 60.0));
     } catch (_) {}
   }
 
@@ -496,53 +517,58 @@ class _DriverTripViewState extends State<DriverTripView> {
   }
 
   Future<void> _speakAndListen(String message) async {
-    // 1. Speak
-    await _flutterTts.speak("收到乘客訊息：$message。請回覆。");
-    
-    // Wait for speech to finish (rough estimate or await completion if supported)
-    // flutter_tts await speak completion is supported on some platforms, let's add a small delay to be safe or use setCompletionHandler
-    // For simplicity here, we assume a delay or rely on completion.
-    await Future.delayed(const Duration(seconds: 4)); 
+    // 1. Speak (if Voice Broadcast is enabled)
+    if (!widget.state.isMuted) {
+      await _flutterTts.speak("收到乘客訊息：$message。請回覆。");
 
-    // 2. Listen (Record for 5 seconds)
-    bool available = await _speech.initialize();
-    if (available) {
-      if (!mounted) return;
-      setState(() => _isListening = true);
-      _showSnackBar(context, "正在錄音回覆 (5秒)...");
-      
-      await _speech.listen(
-        onResult: (result) {
-          setState(() {
-            _lastWords = result.recognizedWords;
-          });
-        },
-        localeId: "zh_TW",
-      );
+      // Wait for speech to finish or use delay
+      await Future.delayed(const Duration(seconds: 4));
+    }
 
-      // Stop after 5 seconds
-      await Future.delayed(const Duration(seconds: 5));
-      await _speech.stop();
-      
-      if (!mounted) return;
-      setState(() => _isListening = false);
+    // 2. Listen (if Chat Voice Reply is enabled)
+    if (widget.state.chatVoiceEnabledSafe) {
+      bool available = await _speech.initialize();
+      if (available) {
+        if (!mounted) return;
+        setState(() => _isListening = true);
+        _showSnackBar(context, "正在錄音回覆 (5秒)...");
 
-      // 3. Send Reply
-      if (_lastWords.isNotEmpty) {
-        _showSnackBar(context, "已發送回覆: $_lastWords");
-        _flutterTts.speak("已發送：$_lastWords");
-        _lastWords = ''; // Reset
+        await _speech.listen(
+          onResult: (result) {
+            setState(() {
+              _lastWords = result.recognizedWords;
+            });
+          },
+          localeId: "zh_TW",
+        );
+
+        // Stop after 5 seconds
+        await Future.delayed(const Duration(seconds: 5));
+        await _speech.stop();
+
+        if (!mounted) return;
+        setState(() => _isListening = false);
+
+        // 3. Send Reply
+        if (_lastWords.isNotEmpty) {
+          _showSnackBar(context, "已發送回覆: $_lastWords");
+          if (!widget.state.isMuted) {
+            _flutterTts.speak("已發送：$_lastWords");
+          }
+          _lastWords = ''; // Reset
+        } else {
+          if (!widget.state.isMuted) {
+            _flutterTts.speak("未偵測到語音，已取消回覆。");
+          }
+        }
       } else {
-        _flutterTts.speak("未偵測到語音，已取消回覆。");
+        debugPrint("The user has denied the use of speech recognition.");
       }
-    } else {
-      debugPrint("The user has denied the use of speech recognition.");
     }
   }
 
-
   // --- Existing UI Logic ---
-  
+
   void _showProfilePage(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -627,57 +653,64 @@ class _DriverTripViewState extends State<DriverTripView> {
                   ],
                 ),
               ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Phone Button
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.phone, color: AppColors.success, size: 20),
-                        onPressed: () => _showSnackBar(context, '撥打電話功能開發中'),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                      ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Phone Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.1),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 12),
-                    // Chat Button
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.chat_bubble_outline, color: AppColors.primary, size: 20),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => const DriverChatPage()),
-                          );
-                        },
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                      ),
+                    child: IconButton(
+                      icon: const Icon(Icons.phone,
+                          color: AppColors.success, size: 20),
+                      onPressed: () => _showSnackBar(context, '撥打電話功能開發中'),
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 40, minHeight: 40),
                     ),
-                    // Debug/Simulate Button (Tiny, for demo)
-                    GestureDetector(
-                      onLongPress: _simulateIncomingMessage,
-                      child: Container(
-                        margin: const EdgeInsets.only(left: 8),
-                        width: 20,
-                        height: 20,
-                        color: Colors.transparent,
-                        child: const Center(child: Icon(Icons.bug_report, size: 12, color: Colors.grey)),
-                      ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Chat Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      shape: BoxShape.circle,
                     ),
-                  ],
-                ),
+                    child: IconButton(
+                      icon: const Icon(Icons.chat_bubble_outline,
+                          color: AppColors.primary, size: 20),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const DriverChatPage()),
+                        );
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 40, minHeight: 40),
+                    ),
+                  ),
+                  // Debug/Simulate Button (Tiny, for demo)
+                  GestureDetector(
+                    onLongPress: _simulateIncomingMessage,
+                    child: Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      width: 20,
+                      height: 20,
+                      color: Colors.transparent,
+                      child: const Center(
+                          child: Icon(Icons.bug_report,
+                              size: 12, color: Colors.grey)),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          
+
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Divider(height: 1),
