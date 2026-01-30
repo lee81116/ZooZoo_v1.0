@@ -86,6 +86,21 @@ class DriverBloc extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle driving mode
+  void toggleDrivingMode(DrivingMode mode) {
+    if (mode == DrivingMode.standard) return; // Cannot toggle standard
+
+    final newModes = Set<DrivingMode>.from(_state.activeModesSafe);
+    if (newModes.contains(mode)) {
+      newModes.remove(mode);
+    } else {
+      newModes.add(mode);
+    }
+
+    _state = _state.copyWith(activeDrivingModes: newModes);
+    notifyListeners();
+  }
+
   /// Update daily earnings goal
   void updateDailyGoal(int newGoal) {
     _state = _state.copyWith(dailyEarningsGoal: newGoal);

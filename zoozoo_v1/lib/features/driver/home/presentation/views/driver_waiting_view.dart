@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
-import 'dart:math';
+
 import 'dart:convert';
 import 'dart:io';
 import '../../../../../core/models/order_model.dart'; // Import Order Model
@@ -40,6 +40,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   // Draggable Avatar Position
   double _avatarLeft = 20.0;
   double _avatarBottom = 120.0;
+  bool _isAvatarDragging = false;
 
   // Feedback Message
   String _feedbackMessage = '';
@@ -117,6 +118,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                         ),
                       ),
                     ),
+                  _buildDrivingModeSelector(widget.state), // New Selector
+                  const SizedBox(height: 12),
                   _buildFloatingBottomPanel(widget.state),
                 ],
               ],
@@ -128,13 +131,33 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
             left: _avatarLeft,
             bottom: _avatarBottom,
             child: GestureDetector(
+              onPanStart: (_) {
+                setState(() {
+                  _isAvatarDragging = true;
+                });
+              },
               onPanUpdate: (details) {
                 setState(() {
                   _avatarLeft += details.delta.dx;
                   _avatarBottom -= details.delta.dy;
                 });
               },
-              child: _buildAvatarWithBubble(),
+              onPanEnd: (_) {
+                setState(() {
+                  _isAvatarDragging = false;
+                });
+              },
+              onPanCancel: () {
+                setState(() {
+                  _isAvatarDragging = false;
+                });
+              },
+              child: AnimatedScale(
+                scale: _isAvatarDragging ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                child: _buildAvatarWithBubble(),
+              ),
             ),
           ),
         ],
@@ -144,6 +167,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
 
   Widget _buildMapBackground() {
     return MapWidget(
+      key: const ValueKey('driver_waiting_map'),
       styleUri: MapboxStyles.DARK,
       cameraOptions: CameraOptions(
         zoom: 15.0, // Initial Zoom
@@ -575,33 +599,278 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
     );
   }
 
+  Widget _buildDrivingModeSelector(DriverState state) {
+    final activeLabels = state.activeModesSafe.map((m) => m.label).join('、');
+
+    return Center(
+      child: GestureDetector(
+        onTap: () => _showDrivingModeSheet(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.tune_rounded,
+                  color: AppColors.primary, size: 20),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '行車模式：$activeLabels',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDrivingModeSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Consumer<DriverBloc>(
+          builder: (context, bloc, child) {
+            final state = bloc.state;
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  // Handle
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '選擇行車模式',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '標準模式將常駐開啟，可同時選擇其他模式',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: DrivingMode.values.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
+                        final mode = DrivingMode.values[index];
+                        final isActive = state.activeModesSafe.contains(mode);
+                        final isStandard = mode == DrivingMode.standard;
+
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppColors.primaryLight.withOpacity(0.1)
+                                : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isActive
+                                  ? AppColors.primary
+                                  : Colors.transparent,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: InkWell(
+                            onTap: isStandard
+                                ? null
+                                : () {
+                                    bloc.toggleDrivingMode(mode);
+                                  },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                children: [
+                                  // Icon/Check
+                                  Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: isActive
+                                          ? AppColors.primary
+                                          : Colors.transparent,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isActive
+                                            ? AppColors.primary
+                                            : Colors.grey[400]!,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: isActive
+                                        ? const Icon(Icons.check,
+                                            size: 16, color: Colors.white)
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              mode.label,
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.bold,
+                                                color: isActive
+                                                    ? AppColors.primary
+                                                    : AppColors.textPrimary,
+                                              ),
+                                            ),
+                                            if (isStandard) ...[
+                                              const SizedBox(width: 8),
+                                              const Icon(Icons.lock,
+                                                  size: 14,
+                                                  color:
+                                                      AppColors.textSecondary),
+                                              const SizedBox(width: 4),
+                                              const Text('必選',
+                                                  style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: AppColors
+                                                          .textSecondary)),
+                                            ]
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          mode.description,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.textSecondary,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            '完成',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildAvatarWithBubble() {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         GestureDetector(
           onTap: () => _showProfilePage(context),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               color: Colors.white,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 10,
+                  color:
+                      Colors.black.withOpacity(_isAvatarDragging ? 0.4 : 0.3),
+                  blurRadius: _isAvatarDragging ? 20 : 10,
+                  offset: _isAvatarDragging ? const Offset(0, 10) : Offset.zero,
+                  spreadRadius: _isAvatarDragging ? 5 : 0,
                 ),
               ],
             ),
             child: const CircleAvatar(
               radius: 28,
-              backgroundImage: const AssetImage('assets/images/seal.png'),
+              backgroundImage: AssetImage('assets/images/seal.png'),
               backgroundColor: AppColors.primaryLight,
             ),
           ),
         ),
         const SizedBox(width: 12),
-        Container(
+        // Hide bubble when dragging for cleaner look? Or keep it? User said "picking up".
+        // Usually when picking up an object, attached speech bubbles might fade out or stay attached.
+        // Let's keep it but maybe give it a slight lift too or just leave it.
+        // The user specifically mentioned "seal", maybe the bubble should detach?
+        // Let's keep it simple: the whole group lifts (handled by AnimatedScale parent).
+        // Just need to update the shadow of the bubble too?
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           margin: const EdgeInsets.only(bottom: 20),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -614,8 +883,9 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 5,
+                color: Colors.black.withOpacity(_isAvatarDragging ? 0.2 : 0.1),
+                blurRadius: _isAvatarDragging ? 15 : 5,
+                offset: _isAvatarDragging ? const Offset(5, 10) : Offset.zero,
               ),
             ],
           ),
