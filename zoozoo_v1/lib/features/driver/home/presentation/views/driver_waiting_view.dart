@@ -22,13 +22,15 @@ class DriverWaitingView extends StatefulWidget {
   });
 
   // Mapbox Access Token (should ideally be in a config file)
-  static const String _accessToken = 'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g';
+  static const String _accessToken =
+      'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g';
 
   @override
   State<DriverWaitingView> createState() => _DriverWaitingViewState();
 }
 
-class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTickerProviderStateMixin {
+class _DriverWaitingViewState extends State<DriverWaitingView>
+    with SingleTickerProviderStateMixin {
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _pointAnnotationManager;
   PolylineAnnotationManager? _polylineAnnotationManager;
@@ -41,10 +43,10 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
       vsync: this,
       duration: const Duration(seconds: 10),
     )..addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        if (mounted) context.read<DriverBloc>().rejectOrder();
-      }
-    });
+        if (status == AnimationStatus.completed) {
+          if (mounted) context.read<DriverBloc>().rejectOrder();
+        }
+      });
   }
 
   @override
@@ -112,7 +114,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
       ),
       onMapCreated: (MapboxMap mapboxMap) {
         _mapboxMap = mapboxMap;
-        
+
         // 1. Configure Native Location Puck (Arrow/Bearing)
         _mapboxMap?.location.updateSettings(
           LocationComponentSettings(
@@ -121,8 +123,9 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
             puckBearingEnabled: true, // Shows arrow/cone based on bearing
           ),
         );
-        
-        if (widget.state.status == DriverStatus.hasOrder && widget.state.currentOrder != null) {
+
+        if (widget.state.status == DriverStatus.hasOrder &&
+            widget.state.currentOrder != null) {
           _handleNewOrder(widget.state.currentOrder!);
         } else {
           _centerCameraOnUser();
@@ -131,16 +134,15 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
     );
   }
 
-
-
   Future<void> _centerCameraOnUser() async {
     try {
       final position = await geo.Geolocator.getCurrentPosition();
       if (!mounted) return;
-      
+
       _mapboxMap?.easeTo(
         CameraOptions(
-          center: Point(coordinates: Position(position.longitude, position.latitude)),
+          center: Point(
+              coordinates: Position(position.longitude, position.latitude)),
           zoom: 15.0,
           padding: MbxEdgeInsets(top: 0, left: 0, bottom: 0, right: 0),
         ),
@@ -151,25 +153,25 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
     }
   }
 
-  Future<List<Position>> _fetchRouteGeometry(Position start, Position end) async {
+  Future<List<Position>> _fetchRouteGeometry(
+      Position start, Position end) async {
     try {
       final client = HttpClient();
       final url = Uri.parse(
-        'https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&access_token=${DriverWaitingView._accessToken}'
-      );
-      
+          'https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${end.lng},${end.lat}?geometries=geojson&overview=full&access_token=${DriverWaitingView._accessToken}');
+
       final request = await client.getUrl(url);
       final response = await request.close();
-      
+
       if (response.statusCode == 200) {
         final jsonString = await response.transform(utf8.decoder).join();
         final data = jsonDecode(jsonString);
-        
+
         final routes = data['routes'] as List;
         if (routes.isNotEmpty) {
           final geometry = routes[0]['geometry'];
           final coordinates = geometry['coordinates'] as List;
-          
+
           return coordinates.map<Position>((coord) {
             return Position(coord[0] as num, coord[1] as num);
           }).toList();
@@ -184,19 +186,22 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
 
   Future<void> _handleNewOrder(Order order) async {
     if (_mapboxMap == null) return;
-    
+
     try {
       final position = await geo.Geolocator.getCurrentPosition();
       final currentPos = Position(position.longitude, position.latitude);
-      final pickupPos = Position(order.pickupLocation.longitude, order.pickupLocation.latitude);
+      final pickupPos = Position(
+          order.pickupLocation.longitude, order.pickupLocation.latitude);
 
       // 1. Initialize Managers if needed
-      _pointAnnotationManager ??= await _mapboxMap!.annotations.createPointAnnotationManager();
-      _polylineAnnotationManager ??= await _mapboxMap!.annotations.createPolylineAnnotationManager();
+      _pointAnnotationManager ??=
+          await _mapboxMap!.annotations.createPointAnnotationManager();
+      _polylineAnnotationManager ??=
+          await _mapboxMap!.annotations.createPolylineAnnotationManager();
 
       // 2. Add Markers (Start & End)
-      final markerImage = await _createMarkerImage(AppColors.accent); 
-      
+      final markerImage = await _createMarkerImage(AppColors.accent);
+
       await _pointAnnotationManager?.create(PointAnnotationOptions(
         geometry: Point(coordinates: pickupPos),
         image: markerImage,
@@ -206,10 +211,10 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
       // 3. Draw Route (Navigation Style)
       // Fetch actual route geometry
       final routeGeometry = await _fetchRouteGeometry(currentPos, pickupPos);
-      
+
       await _polylineAnnotationManager?.create(PolylineAnnotationOptions(
         geometry: LineString(coordinates: routeGeometry),
-        lineColor: Colors.white.value, 
+        lineColor: Colors.white.value,
         lineWidth: 3.0, // Thinner, high quality
         lineJoin: LineJoin.ROUND,
       ));
@@ -224,27 +229,25 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
           if (p.lng < minLng) minLng = p.lng.toDouble();
           if (p.lng > maxLng) maxLng = p.lng.toDouble();
         }
-        
+
         final padding = 100.0;
         final camera = await _mapboxMap!.cameraForCoordinateBounds(
-          CoordinateBounds(
-              southwest: Point(coordinates: Position(minLng, minLat)), 
-              northeast: Point(coordinates: Position(maxLng, maxLat)),
-              infiniteBounds: false
-          ),
-          MbxEdgeInsets(top: padding, left: padding, bottom: 300, right: padding), 
-          0, 
-          0,
-          null,
-          null
-        );
-        
+            CoordinateBounds(
+                southwest: Point(coordinates: Position(minLng, minLat)),
+                northeast: Point(coordinates: Position(maxLng, maxLat)),
+                infiniteBounds: false),
+            MbxEdgeInsets(
+                top: padding, left: padding, bottom: 300, right: padding),
+            0,
+            0,
+            null,
+            null);
+
         _mapboxMap?.flyTo(
           camera,
-          MapAnimationOptions(duration: 1500), 
+          MapAnimationOptions(duration: 1500),
         );
       }
-
     } catch (e) {
       debugPrint("Error handling new order map update: $e");
     }
@@ -259,14 +262,22 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
   Future<Uint8List> _createMarkerImage(Color color) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final paint = Paint()..color = color..style = PaintingStyle.fill;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
     final radius = 10.0;
     canvas.drawCircle(Offset(radius, radius), radius, paint);
-    final borderPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2.0;
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
     canvas.drawCircle(Offset(radius, radius), radius, borderPaint);
     final picture = recorder.endRecording();
-    final img = await picture.toImage((radius * 2).toInt(), (radius * 2).toInt());
-    return (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+    final img =
+        await picture.toImage((radius * 2).toInt(), (radius * 2).toInt());
+    return (await img.toByteData(format: ui.ImageByteFormat.png))!
+        .buffer
+        .asUint8List();
   }
 
   Widget _buildNewOrderUI(Order order) {
@@ -287,39 +298,46 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('新訂單！距離 ${order.distance.toStringAsFixed(1)} km', 
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text('新訂單！距離 ${order.distance.toStringAsFixed(1)} km',
+              style:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('${order.estimatedMinutes} 分鐘後到達上車點', 
-            style: const TextStyle(color: AppColors.textSecondary)),
+          Text('${order.estimatedMinutes} 分鐘後到達上車點',
+              style: const TextStyle(color: AppColors.textSecondary)),
           const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                     context.read<DriverBloc>().rejectOrder();
+                    context.read<DriverBloc>().rejectOrder();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.error,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                   ),
-                  child: const Text('拒絕', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('拒絕',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                     context.read<DriverBloc>().acceptOrder();
+                    context.read<DriverBloc>().acceptOrder();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                   ),
-                  child: const Text('接受訂單', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  child: const Text('接受訂單',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -344,7 +362,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
               value: 1.0 - _timerController!.value, // Count down
               backgroundColor: Colors.white.withOpacity(0.3),
               valueColor: AlwaysStoppedAnimation(
-                Color.lerp(Colors.green, Colors.red, _timerController!.value)!, // Green -> Red
+                Color.lerp(Colors.green, Colors.red,
+                    _timerController!.value)!, // Green -> Red
               ),
             ),
           ),
@@ -355,7 +374,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
 
   Widget _buildFloatingTopBar(DriverState state) {
     final double targetAmount = state.dailyEarningsGoal.toDouble();
-    final double progress = (state.todayEarnings / targetAmount).clamp(0.0, 1.0);
+    final double progress =
+        (state.todayEarnings / targetAmount).clamp(0.0, 1.0);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -391,7 +411,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.currency_yen, color: AppColors.warning, size: 20),
+              const Icon(Icons.currency_yen,
+                  color: AppColors.warning, size: 20),
               const SizedBox(width: 8),
               Text(
                 '今日已賺',
@@ -473,7 +494,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
                 ),
               ),
               SizedBox(width: 4),
-              Icon(Icons.local_fire_department, size: 16, color: AppColors.error),
+              Icon(Icons.local_fire_department,
+                  size: 16, color: AppColors.error),
             ],
           ),
         ),
@@ -518,7 +540,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
               ),
             ],
           ),
-          
+
           // Offline Button (Slide/Hold Style)
           Container(
             height: 48,
@@ -530,23 +552,23 @@ class _DriverWaitingViewState extends State<DriverWaitingView> with SingleTicker
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
-                   // Simple tap for now, can be long press
-                   context.read<DriverBloc>().goOffline();
-                   _showSnackBar(context, '已下線休息');
+                  // Simple tap for now, can be long press
+                  context.read<DriverBloc>().goOffline();
+                  _showSnackBar(context, '已下線休息');
                 },
                 borderRadius: BorderRadius.circular(24),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: const [
-                      Icon(Icons.power_settings_new, color: AppColors.textSecondary),
+                      Icon(Icons.power_settings_new,
+                          color: AppColors.textSecondary),
                       SizedBox(width: 8),
                       Text(
                         '下線',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: AppColors.textSecondary,
-                          
                         ),
                       ),
                     ],
