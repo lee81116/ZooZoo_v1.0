@@ -8,7 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For rootBundle
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
-import 'package:path_provider/path_provider.dart'; // For 3D model loading
+import 'package:path_provider/path_provider.dart';
+
 import 'package:provider/provider.dart';
 
 import 'package:flutter_tts/flutter_tts.dart';
@@ -35,7 +36,8 @@ class DriverTripView extends StatefulWidget {
   State<DriverTripView> createState() => _DriverTripViewState();
 }
 
-class _DriverTripViewState extends State<DriverTripView> {
+class _DriverTripViewState extends State<DriverTripView>
+    with SingleTickerProviderStateMixin {
   MapboxMap? _mapboxMap;
 
   // Annotation Managers (still useful for Destination/Pickup markers)
@@ -47,23 +49,18 @@ class _DriverTripViewState extends State<DriverTripView> {
       'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjU1MTJhMGN5bjNlczc1Y2o2OWpsNCJ9.KG88KmWjysp0PNFO5LCZ1g';
 
   // --- 3D Model & Style Config (From Passenger Page) ---
+
+  static const _routeSourceId = 'route-source';
+  static const _routeLayerId = 'route-layer';
+  static const _routeColor = Colors.white;
+
+  // --- 3D Model Config ---
   static const _carModelAssetPath = 'assets/3dmodels/base_basic_pbr.glb';
   static const _carModelId = 'car-3d-model';
   static const _carSourceId = 'car-source';
   static const _carLayerId = 'car-layer';
-
-  static const _routeSourceId = 'route-source';
-  static const _routeLayerId = 'route-layer';
-  static const _routeColor = Color(0xFFADD8E6); // Light Blue
-
   bool _using3DCarModel = false;
-
-  // Smooth rotation tracking
-  double _currentBearing = 0.0;
-  double _cameraBearing = 0.0;
-  static const _bearingSmoothFactor = 0.85;
-  static const _cameraSmoothFactor = 0.06;
-  static const _modelCalibration = 180.0; // Fix car facing backwards
+  static const _modelCalibration = 180.0;
 
   StreamSubscription<geo.Position>? _positionStream;
 
@@ -79,10 +76,14 @@ class _DriverTripViewState extends State<DriverTripView> {
   IconData _currentManeuverIcon = Icons.arrow_upward;
 
   bool _isPanelExpanded = false;
+  late AnimationController _simController;
+  VoidCallback? _simListener;
 
   @override
   void initState() {
     super.initState();
+    _simController =
+        AnimationController(vsync: this, duration: const Duration(seconds: 10));
     _initVoiceServices();
     // Auto-expand for pickup to see address, collapse for trip
     if (widget.state.status == DriverStatus.toPickup) {
@@ -107,6 +108,7 @@ class _DriverTripViewState extends State<DriverTripView> {
 
   @override
   void dispose() {
+    _simController.dispose();
     _positionStream?.cancel();
     _circleAnnotationManager = null;
     _carAnnotationManager = null;
@@ -125,10 +127,10 @@ class _DriverTripViewState extends State<DriverTripView> {
           // 1. Map Layer
           MapWidget(
             key: const ValueKey("driver_nav_map"),
-            styleUri: MapboxStyles.STANDARD, // Use Standard Style (3D)
+            styleUri: MapboxStyles.DARK,
             cameraOptions: CameraOptions(
               zoom: 17.0,
-              pitch: 60.0, // Initial driving pitch
+              pitch: 60.0, // 3D View
             ),
             onMapCreated: _onMapCreated,
           ),
@@ -293,7 +295,7 @@ class _DriverTripViewState extends State<DriverTripView> {
           id: _routeLayerId,
           sourceId: _routeSourceId,
           lineColor: _routeColor.value,
-          lineWidth: 10.0,
+          lineWidth: 4.0,
           lineCap: LineCap.ROUND,
           lineJoin: LineJoin.ROUND,
           lineEmissiveStrength: 1.0,
@@ -305,60 +307,19 @@ class _DriverTripViewState extends State<DriverTripView> {
   }
 
   Future<void> _setupCarLayer() async {
-    // 1. Try 3D Model
+    // 1. Try 3D Model first
     await _trySetup3DCarModel();
 
-    // 2. Setup Fallback Icon (always good to have or if 3D fails)
+    // 2. Setup Fallback Icon
     if (!_using3DCarModel) {
       await _setupCarIconMarker();
-    }
-  }
-
-  Future<void> _trySetup3DCarModel() async {
-    if (_mapboxMap == null) return;
-    try {
-      final modelUri =
-          await _loadModelToTempFile(_carModelAssetPath, 'car.glb');
-      await _mapboxMap!.style.addStyleModel(_carModelId, modelUri);
-
-      // Dummy initial position
-      final geoJson = _createPointGeoJson(Position(121.5, 25.0), 0);
-
-      await _mapboxMap!.style.addSource(
-        GeoJsonSource(id: _carSourceId, data: jsonEncode(geoJson)),
-      );
-
-      await _mapboxMap!.style.addLayer(
-        ModelLayer(
-          id: _carLayerId,
-          sourceId: _carSourceId,
-          modelId: _carModelId,
-          modelScale: [35.0, 35.0, 35.0], // Match passenger page
-          modelRotation: [0.0, 0.0, 0.0],
-          modelTranslation: [0.0, 0.0, 0.5],
-        ),
-      );
-
-      // Enable Animation
-      try {
-        await _mapboxMap!.style.setStyleLayerProperty(
-            _carLayerId, 'model-animation-enabled', true);
-        await _mapboxMap!.style.setStyleLayerProperty(
-            _carLayerId, 'model-animation', 'running' // Default animation
-            );
-      } catch (_) {}
-
-      _using3DCarModel = true;
-    } catch (e) {
-      debugPrint("3D Setup Failed: $e");
-      _using3DCarModel = false;
     }
   }
 
   Future<void> _setupCarIconMarker() async {
     try {
       final ByteData bytes =
-          await rootBundle.load('assets/images/vehicles/dog.png');
+          await rootBundle.load('assets/images/vehicles/arrow.png');
       final Uint8List list = bytes.buffer.asUint8List();
       await _mapboxMap!.style.addStyleImage('car-icon', 3.0,
           MbxImage(width: 100, height: 100, data: list), false, [], [], null);
@@ -420,9 +381,8 @@ class _DriverTripViewState extends State<DriverTripView> {
         });
       }
 
-      // 4. Start Navigation Loop
-      _startMockNavigationLoop(
-          startPos); // Using "Mock" naming but it's real loc loop now
+      // 4. Start Auto-Drive Simulation
+      _startRouteSimulation(routeGeometry);
     } catch (e) {
       debugPrint("Error updating route: $e");
     }
@@ -463,51 +423,58 @@ class _DriverTripViewState extends State<DriverTripView> {
     }
   }
 
-  void _startMockNavigationLoop(Position startPos) {
+  void _startRouteSimulation(List<List<double>> geometry) {
+    if (geometry.length < 2) return;
     _positionStream?.cancel();
 
-    // Continuous Tracking
-    const locationSettings = geo.LocationSettings(
-      accuracy: geo.LocationAccuracy.bestForNavigation,
-      distanceFilter: 2,
-    );
+    // Calculate segment distances
+    final List<double> dists = [0.0];
+    for (int i = 0; i < geometry.length - 1; i++) {
+      final p1 = geometry[i];
+      final p2 = geometry[i + 1];
+      final d = geo.Geolocator.distanceBetween(
+          p1[1], p1[0], p2[1], p2[0]); // Lat, Lng
+      dists.add(dists.last + d);
+    }
+    final totalDist = dists.last;
 
-    // Initial positioning
-    _updateCarVisuals(
-        startPos, 0, startPos.lat.toDouble(), startPos.lng.toDouble());
-
-    _positionStream =
-        geo.Geolocator.getPositionStream(locationSettings: locationSettings)
-            .listen((pos) {
-      if (!mounted) return;
-      _handleLocationUpdate(pos);
-    });
-  }
-
-  void _handleLocationUpdate(geo.Position pos) {
-    // 1. Calculate Bearings
-    double targetBearing =
-        pos.heading; // Device heading often noisy, but okay for real driving
-
-    // Only update bearing if moving (speed > 1 m/s approx 3.6 km/h) to avoid spinning at lights
-    if (pos.speed < 1.0) {
-      targetBearing = _currentBearing;
+    if (_simListener != null) {
+      _simController.removeListener(_simListener!);
     }
 
-    // Smooth model bearing
-    _currentBearing =
-        _lerpBearing(_currentBearing, targetBearing, _bearingSmoothFactor);
+    _simListener = () {
+      if (!mounted || _mapboxMap == null) return;
+      final value = _simController.value;
+      final currentDist = value * totalDist;
 
-    // Smooth camera bearing (lag)
-    _cameraBearing =
-        _lerpBearing(_cameraBearing, _currentBearing, _cameraSmoothFactor);
+      // Find segment
+      int index = dists.length - 2; // Default to last segment
+      for (int i = 0; i < dists.length - 1; i++) {
+        if (currentDist <= dists[i + 1]) {
+          index = i;
+          break;
+        }
+      }
 
-    // 2. Update Visuals
-    final currentPos = Position(pos.longitude, pos.latitude);
-    _updateCarVisuals(currentPos, _currentBearing, pos.latitude, pos.longitude);
+      final p1 = geometry[index];
+      final p2 = geometry[index + 1];
+      final d1 = dists[index];
+      final d2 = dists[index + 1];
 
-    // Note: In a real app we would check distance to next step here
-    // For now we just show the static first step instructions
+      double t = 0.0;
+      if (d2 > d1) t = (currentDist - d1) / (d2 - d1);
+
+      final lat = p1[1] + (p2[1] - p1[1]) * t;
+      final lng = p1[0] + (p2[0] - p1[0]) * t;
+
+      final bearing = geo.Geolocator.bearingBetween(p1[1], p1[0], p2[1], p2[0]);
+
+      _updateCarVisuals(Position(lng, lat), bearing, lat, lng);
+    };
+
+    _simController.addListener(_simListener!);
+    _simController.reset();
+    _simController.forward();
   }
 
   Future<void> _updateCarVisuals(
@@ -538,22 +505,14 @@ class _DriverTripViewState extends State<DriverTripView> {
     // C. Update Camera
     _mapboxMap!.setCamera(CameraOptions(
       center: Point(coordinates: pos),
-      zoom: 17.5,
-      pitch: 65.0,
-      bearing: _cameraBearing, // Use lagged camera bearing
+      zoom: 15.0,
+      pitch: 60.0,
+      bearing: bearing,
       padding: MbxEdgeInsets(top: 0, left: 0, bottom: 200, right: 0),
     ));
   }
 
   // --- Helpers ---
-
-  Future<String> _loadModelToTempFile(String assetPath, String tempName) async {
-    final byteData = await rootBundle.load(assetPath);
-    final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/$tempName');
-    await file.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
-    return 'file://${file.path}';
-  }
 
   Future<Map<String, dynamic>> _fetchRouteData(
       Position start, Position end) async {
@@ -607,6 +566,53 @@ class _DriverTripViewState extends State<DriverTripView> {
     };
   }
 
+  Future<void> _trySetup3DCarModel() async {
+    if (_mapboxMap == null) return;
+    try {
+      final modelUri =
+          await _loadModelToTempFile(_carModelAssetPath, 'car.glb');
+      await _mapboxMap!.style.addStyleModel(_carModelId, modelUri);
+
+      final geoJson = _createPointGeoJson(Position(121.5, 25.0), 0);
+      await _mapboxMap!.style.addSource(
+        GeoJsonSource(id: _carSourceId, data: jsonEncode(geoJson)),
+      );
+
+      await _mapboxMap!.style.addLayer(
+        ModelLayer(
+          id: _carLayerId,
+          sourceId: _carSourceId,
+          modelId: _carModelId,
+          modelScale: [35.0, 35.0, 35.0],
+          modelRotation: [0.0, 0.0, 0.0],
+          modelTranslation: [0.0, 0.0, 0.5],
+        ),
+      );
+
+      // Enable Animation
+      try {
+        await _mapboxMap!.style.setStyleLayerProperty(
+            _carLayerId, 'model-animation-enabled', true);
+        await _mapboxMap!.style.setStyleLayerProperty(
+            _carLayerId, 'model-animation', 'running' // Default animation
+            );
+      } catch (_) {}
+
+      _using3DCarModel = true;
+    } catch (e) {
+      debugPrint("3D Setup Failed: $e");
+      _using3DCarModel = false;
+    }
+  }
+
+  Future<String> _loadModelToTempFile(String assetPath, String tempName) async {
+    final byteData = await rootBundle.load(assetPath);
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/$tempName');
+    await file.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+    return 'file://${file.path}';
+  }
+
   Map<String, dynamic> _createPointGeoJson(Position pos, double bearing) {
     return {
       'type': 'FeatureCollection',
@@ -621,24 +627,6 @@ class _DriverTripViewState extends State<DriverTripView> {
         }
       ]
     };
-  }
-
-  double _lerpBearing(double current, double target, double factor) {
-    // Normalize to 0-360
-    current = current % 360;
-    target = target % 360;
-    if (current < 0) current += 360;
-    if (target < 0) target += 360;
-
-    double diff = target - current;
-    if (diff > 180)
-      diff -= 360;
-    else if (diff < -180) diff += 360;
-
-    double result = current + diff * factor;
-    result = result % 360;
-    if (result < 0) result += 360;
-    return result;
   }
 
   Future<void> _addCircleMarker(Position pos, Color color) async {
@@ -658,7 +646,7 @@ class _DriverTripViewState extends State<DriverTripView> {
       _mapboxMap?.setCamera(CameraOptions(
           center: Point(coordinates: Position(pos.longitude, pos.latitude)),
           zoom: 17.0,
-          pitch: 60.0));
+          pitch: 0.0));
     } catch (_) {}
   }
 
