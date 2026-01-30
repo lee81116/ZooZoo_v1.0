@@ -17,10 +17,10 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
   final OrderStorageService _storageService = OrderStorageService();
   List<DriverOrderHistory> _history = [];
   bool _isLoading = true;
-  
+
   // Week navigation
   late DateTime _currentWeekStart;
-  
+
   // Data for the chart
   Map<DateTime, int> _dailyEarnings = {};
   DateTime? _selectedDate;
@@ -33,7 +33,8 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
     final now = DateTime.now();
     // In Dart, weekday 1 is Monday, 7 is Sunday.
     // We want the start of the week.
-    _currentWeekStart = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    _currentWeekStart = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
     _selectedDate = DateTime(now.year, now.month, now.day);
     _loadHistory();
   }
@@ -43,21 +44,23 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
     if (_selectedDate == null) {
       return _history; // Fail-safe
     }
-    return _history.where((order) => DateUtils.isSameDay(order.completedAt, _selectedDate)).toList();
+    return _history
+        .where((order) => DateUtils.isSameDay(order.completedAt, _selectedDate))
+        .toList();
   }
 
   int get _displayedTotalEarnings {
-     if (_selectedDate == null) return 0;
-     return _dailyEarnings[_selectedDate] ?? 0;
+    if (_selectedDate == null) return 0;
+    return _dailyEarnings[_selectedDate] ?? 0;
   }
-  
+
   // Calculate earnings for the month of the currently displayed week
-  // We use the week's end date to determine the "primary" month if it spans two months, 
+  // We use the week's end date to determine the "primary" month if it spans two months,
   // or just use the start date. Let's use the start date for simplicity.
   int get _currentMonthEarnings {
     final targetMonth = _currentWeekStart.month;
     final targetYear = _currentWeekStart.year;
-    
+
     int total = 0;
     _dailyEarnings.forEach((date, earnings) {
       if (date.year == targetYear && date.month == targetMonth) {
@@ -66,7 +69,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
     });
     return total;
   }
-  
+
   // Data for the chart for the CURRENTLY VIEWED week
   Map<DateTime, int> get _currentWeekEarnings {
     final Map<DateTime, int> weekData = {};
@@ -79,13 +82,13 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
 
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final history = await _storageService.getOrderHistory();
-      
+
       // Process ALL history into daily earnings map
       final Map<DateTime, int> dailyEarnings = {};
-      
+
       for (var order in history) {
         final date = DateTime(
           order.completedAt.year,
@@ -104,7 +107,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('載入失敗: $e')),
+          SnackBar(content: Text('載入失敗: \$$e')),
         );
       }
     }
@@ -115,7 +118,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
       _selectedDate = date;
     });
   }
-  
+
   void _previousWeek() {
     setState(() {
       _currentWeekStart = _currentWeekStart.subtract(const Duration(days: 7));
@@ -133,7 +136,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
       _selectedDate = _currentWeekStart;
     });
   }
-  
+
   void _goToToday() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -155,7 +158,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
             controller: TextEditingController(text: newGoal),
             onChanged: (value) => newGoal = value,
             decoration: const InputDecoration(
-              suffixText: '¥',
+              suffixText: '\$',
               border: OutlineInputBorder(),
             ),
           ),
@@ -199,11 +202,11 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
               ),
             ),
             const SizedBox(height: 8),
-            
+
             // Monthly Earnings Header
             if (!_isLoading)
               Text(
-                '${DateFormat('M', 'zh_TW').format(_currentWeekStart)}月總收益',
+                '\$${DateFormat('M', 'zh_TW').format(_currentWeekStart)}月總收益',
                 style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -211,16 +214,16 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
               ),
             if (!_isLoading)
               Text(
-                '¥$_currentMonthEarnings',
+                '\$$_currentMonthEarnings',
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
                 ),
               ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Weekly Earnings Chart
             if (!_isLoading)
               SizedBox(
@@ -237,9 +240,9 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                   onEditGoal: _editGoal,
                 ),
               ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Selected Day Summary
             if (_selectedDate != null)
               Padding(
@@ -256,7 +259,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                       ),
                     ),
                     Text(
-                      '總計 ¥$_displayedTotalEarnings',
+                      '總計 \$$_displayedTotalEarnings',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -267,7 +270,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                 ),
               ),
 
-             const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
             // History list for selected day
             Expanded(
@@ -347,10 +350,10 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Price
               Text(
-                '¥${order.price}',
+                '\$${order.price}',
                 style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
@@ -358,7 +361,7 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Info Rows
               _DetailRow(
                 icon: Icons.calendar_today,
@@ -375,10 +378,10 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
               _DetailRow(
                 icon: Icons.map,
                 label: '距離',
-                value: '${order.distance.toStringAsFixed(1)} km',
+                value: '\$${order.distance.toStringAsFixed(1)} km',
               ),
               const SizedBox(height: 24),
-              
+
               // Route
               Container(
                 padding: const EdgeInsets.all(16),
@@ -390,14 +393,15 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                   children: [
                     Row(
                       children: [
-                         const Icon(Icons.circle, size: 12, color: AppColors.primary),
-                         const SizedBox(width: 8),
-                         Expanded(
-                           child: Text(
-                             order.pickupAddress,
-                             style: const TextStyle(fontSize: 14),
-                           ),
-                         ),
+                        const Icon(Icons.circle,
+                            size: 12, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            order.pickupAddress,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
                       ],
                     ),
                     const Padding(
@@ -412,21 +416,22 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
                     ),
                     Row(
                       children: [
-                         const Icon(Icons.circle, size: 12, color: AppColors.accent),
-                         const SizedBox(width: 8),
-                         Expanded(
-                           child: Text(
-                             order.destinationAddress,
-                             style: const TextStyle(fontSize: 14),
-                           ),
-                         ),
+                        const Icon(Icons.circle,
+                            size: 12, color: AppColors.accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            order.destinationAddress,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Close Button
               SizedBox(
                 width: double.infinity,
@@ -501,7 +506,7 @@ class _OrderHistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('HH:mm');
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -532,7 +537,7 @@ class _OrderHistoryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '¥${order.price}',
+                '\$${order.price}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -542,7 +547,7 @@ class _OrderHistoryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          
+
           // Route
           Row(
             children: [
