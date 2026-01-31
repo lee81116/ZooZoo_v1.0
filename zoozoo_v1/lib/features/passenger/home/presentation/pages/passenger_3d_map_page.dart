@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../core/services/map/map_models.dart';
+import '../../../../../app/router/app_router.dart';
 
 /// 3D Map page with car simulation for ride tracking
 class Passenger3DMapPage extends StatefulWidget {
@@ -96,7 +97,7 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
 
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 40),
+      duration: const Duration(minutes: 1),
     );
 
     _animationController.addListener(_onAnimationUpdate);
@@ -202,12 +203,11 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   void _onMapCreated(MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
 
-    // Create managers
-    // Create managers
-    _circleAnnotationManager =
-        await mapboxMap.annotations.createCircleAnnotationManager();
+    // Hide Scale Bar
+    await mapboxMap.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
 
-    // Draw route
+    // Create managers
+    // Draw initial route (and setup layers)
     await _drawRoute();
 
     // Add start and end markers (using circles - more reliable than emoji)
@@ -226,27 +226,22 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   }
 
   Future<void> _drawRoute() async {
-    // Initial empty route
-    final geoJson = _createLineGeoJson([]);
+    // 1. Add sources
+    await _mapboxMap!.style.addSource(GeoJsonSource(
+      id: _routeSourceId,
+      data: jsonEncode(_createLineGeoJson([])),
+    ));
 
-    // Add Source
-    await _mapboxMap!.style.addSource(
-      GeoJsonSource(id: _routeSourceId, data: jsonEncode(geoJson)),
-    );
-
-    // Add Layer
-    await _mapboxMap!.style.addLayer(
-      LineLayer(
-        id: _routeLayerId,
-        sourceId: _routeSourceId,
-        lineColor: _routeColor.value,
-        lineWidth: 12.0, // Widened from 6.0
-        lineCap: LineCap.ROUND,
-        lineJoin: LineJoin.ROUND,
-        lineEmissiveStrength: 1.0, // Make it glow/ignore lighting
-      ),
-    );
-    // Note: We don't populate data here, it's updated in animation loop
+    // 2. Add Layer (Must be done AFTER source is added)
+    await _mapboxMap!.style.addLayer(LineLayer(
+      id: _routeLayerId,
+      sourceId: _routeSourceId,
+      lineColor: _routeColor.value,
+      lineWidth: 8.0,
+      lineCap: LineCap.ROUND,
+      lineJoin: LineJoin.ROUND,
+      lineEmissiveStrength: 1.0,
+    ));
   }
 
   Map<String, dynamic> _createLineGeoJson(List<List<double>> coordinates) {
@@ -294,8 +289,15 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
   Future<void> _setupCarMarker() async {
     try {
       // Load car icon from assets
-      final ByteData bytes =
-          await rootBundle.load('assets/images/vehicles/dog.png');
+      // Select icon based on vehicle type
+      String imageAsset = 'assets/images/vehicles/dog.png';
+      if (widget.vehicleType == '招財貓貓') {
+        imageAsset = 'assets/images/vehicles/neko.png';
+      } else if (widget.vehicleType == '北極熊阿北') {
+        imageAsset = 'assets/images/vehicles/bear.png';
+      }
+
+      final ByteData bytes = await rootBundle.load(imageAsset);
       final Uint8List list = bytes.buffer.asUint8List();
 
       // Add image to map style
@@ -528,34 +530,40 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     try {
       final remainingCoords =
           _getRemainingRouteCoordinates(_progress, position);
-      if (remainingCoords.isNotEmpty) {
-        final routeGeoJson = _createLineGeoJson(remainingCoords);
-        updates.add(_mapboxMap!.style.setStyleSourceProperty(
-          _routeSourceId,
-          'data',
-          jsonEncode(routeGeoJson),
-        ));
-      }
+      final routeGeoJson = _createLineGeoJson(remainingCoords);
+      updates.add(_mapboxMap!.style.setStyleSourceProperty(
+        _routeSourceId,
+        'data',
+        jsonEncode(routeGeoJson),
+      ));
     } catch (e) {
       // Silent fail
     }
 
-    // 3. Icon Fallback (only if car model fails)
-    if (_carAnnotation != null &&
-        _carAnnotationManager != null &&
-        !_using3DCarModel) {
-      await _carAnnotationManager!.delete(_carAnnotation!);
-      _carAnnotation = await _carAnnotationManager!.create(
-        PointAnnotationOptions(
-          geometry: Point(
-            coordinates: Position(position.longitude, position.latitude),
-          ),
-          iconImage: 'car-icon',
-          iconSize: 1.0,
-          iconRotate: _currentBearing,
-          iconAnchor: IconAnchor.CENTER,
-        ),
-      );
+    // 3. Icon Fallback (Transition Logic)
+    // Logic: Always show 2D icon UNLESS 3D model is active AND we are sure it's rendering.
+    // For now, checks _using3DCarModel.
+    if (!_using3DCarModel &&
+        _carAnnotation != null &&
+        _carAnnotationManager != null) {
+      // Update existing annotation instead of delete/create (Performance Fix)
+      try {
+        _carAnnotation!.geometry = Point(
+          coordinates: Position(position.longitude, position.latitude),
+        );
+        _carAnnotation!.iconRotate = _currentBearing;
+        await _carAnnotationManager!.update(_carAnnotation!);
+      } catch (e) {
+        // Only if update fails (rare), try recreate
+        debugPrint("Annotation update failed, recreating: $e");
+      }
+    } else if (_using3DCarModel && _carAnnotation != null) {
+      // Model is active, hide/remove 2D icon to prevent overlap
+      // We can just set opacity to 0 or remove it
+      try {
+        await _carAnnotationManager!.delete(_carAnnotation!);
+        _carAnnotation = null; // Prevent further updates
+      } catch (_) {}
     }
 
     // 4. Move Camera (Synced but using Camera Bearing)
@@ -579,25 +587,72 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
     }
   }
 
-  /// Get coordinates for the remaining path (Vanishing effect)
+  /// Get coordinates for the remaining path
   List<List<double>> _getRemainingRouteCoordinates(
       double t, AppLatLng currentPos) {
     if (_routeWaypoints.isEmpty) return [];
 
-    // Calculate split index
-    final totalSegments = _routeWaypoints.length - 1;
-    // Safety check
-    if (totalSegments < 1) return [];
-
-    final currentSegmentIndex = (t * totalSegments).floor();
-
-    // Build list: CurrentPos -> Next Waypoint -> ... -> End
-    final coords = <List<double>>[];
-    coords.add([currentPos.longitude, currentPos.latitude]);
-
-    for (int i = currentSegmentIndex + 1; i < _routeWaypoints.length; i++) {
-      coords.add([_routeWaypoints[i].longitude, _routeWaypoints[i].latitude]);
+    // Calculate total length
+    double totalLength = 0;
+    final segmentLengths = <double>[];
+    for (int i = 0; i < _routeWaypoints.length - 1; i++) {
+      final dist = _distanceBetween(
+        _routeWaypoints[i],
+        _routeWaypoints[i + 1],
+      );
+      segmentLengths.add(dist);
+      totalLength += dist;
     }
+
+    if (totalLength == 0) return [];
+
+    // Calculate target distance for the START of the visible line
+    // User wants it 30m ahead of current car pos
+    // Convert 30 meters to approx degrees (1 deg lat ~= 111km)
+    const offsetMeters = 30.0;
+    final offsetDegrees = offsetMeters / 111000.0;
+
+    final currentDistance = t * totalLength;
+    final targetDistance = currentDistance + offsetDegrees;
+
+    // If target is beyond route end, return empty
+    if (targetDistance >= totalLength) {
+      return [];
+    }
+
+    final coords = <List<double>>[];
+    double accumulated = 0;
+
+    for (int i = 0; i < segmentLengths.length; i++) {
+      final nextAccumulated = accumulated + segmentLengths[i];
+
+      if (nextAccumulated >= targetDistance) {
+        // Target is in this segment
+        final localDist = targetDistance - accumulated;
+        final segmentLen = segmentLengths[i];
+
+        final ratio = segmentLen > 0 ? localDist / segmentLen : 0.0;
+
+        final start = _routeWaypoints[i];
+        final end = _routeWaypoints[i + 1];
+
+        // Interpolate the exact start point ON THE LINE
+        final newLat = start.latitude + (end.latitude - start.latitude) * ratio;
+        final newLng =
+            start.longitude + (end.longitude - start.longitude) * ratio;
+
+        coords.add([newLng, newLat]);
+
+        // Add remaining full waypoints
+        for (int k = i + 1; k < _routeWaypoints.length; k++) {
+          coords
+              .add([_routeWaypoints[k].longitude, _routeWaypoints[k].latitude]);
+        }
+        return coords;
+      }
+      accumulated = nextAccumulated;
+    }
+
     return coords;
   }
 
@@ -700,13 +755,13 @@ class _Passenger3DMapPageState extends State<Passenger3DMapPage>
 
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
-        context.go('/passenger');
+        context.go(Routes.passengerHome, extra: {'reset': true});
       }
     });
   }
 
   String _formatTimeRemaining() {
-    final remainingSeconds = ((1 - _progress) * 15).round();
+    final remainingSeconds = ((1 - _progress) * 60).round();
     final minutes = remainingSeconds ~/ 60;
     final seconds = remainingSeconds % 60;
     if (minutes > 0) {
