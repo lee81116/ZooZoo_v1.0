@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -59,8 +60,8 @@ class _BookingMapPageState extends State<BookingMapPage>
   bool _isRouteLoaded = false;
 
   // Driver info
-  final String _driverName = '北極熊阿北';
-  final String _driverEmoji = '🐻‍❄️';
+  late String _driverName;
+  late String _driverEmoji;
   final String _vehiclePlate = 'ABC-1234';
 
   // Route source/layer IDs
@@ -81,6 +82,32 @@ class _BookingMapPageState extends State<BookingMapPage>
 
     _driverLat = _driverStartLat;
     _driverLng = _driverStartLng;
+
+    _initializeDriverInfo();
+  }
+
+  void _initializeDriverInfo() {
+    // 1. Determine Emoji based on Vehicle Type
+    switch (widget.vehicleType) {
+      case '元氣汪汪':
+        _driverEmoji = '🐶';
+        break;
+      case '招財貓貓':
+        _driverEmoji = '🐱';
+        break;
+      case '北極熊阿北':
+        _driverEmoji = '🐻‍❄️';
+        break;
+      default:
+        _driverEmoji = '🐶'; // Default
+    }
+
+    // 2. Random Driver Name (Surname + Mr/Ms)
+    final surnames = ['陳', '林', '黃', '張', '李', '王', '吳', '劉', '蔡', '楊'];
+    final random = math.Random();
+    final surname = surnames[random.nextInt(surnames.length)];
+    final title = random.nextBool() ? '先生' : '小姐';
+    _driverName = '$surname$title';
   }
 
   @override
