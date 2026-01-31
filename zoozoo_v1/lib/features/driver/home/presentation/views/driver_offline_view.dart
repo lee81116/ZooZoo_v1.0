@@ -85,7 +85,6 @@ class DriverOfflineView extends StatelessWidget {
           GlassButton(
             onPressed: () {
               context.read<DriverBloc>().goOnline();
-              _showSnackBar(context, '已上線！等待訂單中...');
             },
             height: 64,
             borderRadius: 32,
@@ -120,17 +119,6 @@ class DriverOfflineView extends StatelessWidget {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => const DriverProfileSheet(),
-    );
-  }
-
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.accent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
     );
   }
 }

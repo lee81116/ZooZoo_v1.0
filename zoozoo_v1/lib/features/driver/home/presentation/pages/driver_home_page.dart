@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../core/theme/app_colors.dart';
 import '../../bloc/driver_bloc.dart';
 import '../../data/driver_state.dart';
 import '../widgets/incoming_order_sheet.dart';
@@ -75,19 +74,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
           bloc.acceptOrder();
-          _showSnackBar('已接單！前往接客');
         },
         onReject: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
           bloc.rejectOrder();
-          _showSnackBar('已拒絕訂單');
         },
         onTimeout: () {
           Navigator.pop(context);
           _isOrderSheetShowing = false;
           bloc.orderTimeout();
-          _showSnackBar('訂單已逾時');
         },
       ),
     );
@@ -115,16 +111,5 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
     // Default: offline screen
     return const DriverOfflineView();
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.accent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   }
 }
