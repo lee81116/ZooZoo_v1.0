@@ -1,86 +1,142 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../app/router/app_router.dart';
 import '../../../../../core/theme/app_colors.dart';
 
-/// Passenger settings page - placeholder
+/// Passenger settings page
 class PassengerSettingsPage extends StatelessWidget {
   const PassengerSettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.arrow_back_ios, size: 14, color: AppColors.textSecondary),
-                      const SizedBox(width: 4),
-                      Text('首頁', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-                    ],
-                  ),
-                  const Spacer(),
-                  const Text(
-                    '設定',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.accent,
-                    ),
-                  ),
-                ],
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.backgroundGradient,
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              const Text(
+                '設定',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.accent,
+                ),
               ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  _buildSettingsItem(icon: Icons.person_outline, title: '個人資料', onTap: () {}),
-                  _buildSettingsItem(icon: Icons.payment_outlined, title: '付款方式', onTap: () {}),
-                  _buildSettingsItem(icon: Icons.notifications_outlined, title: '通知設定', onTap: () {}),
-                  _buildSettingsItem(icon: Icons.help_outline, title: '幫助中心', onTap: () {}),
-                  _buildSettingsItem(icon: Icons.info_outline, title: '關於我們', onTap: () {}),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => context.go('/login'),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 4),
-                      child: Text('登出'),
+              const SizedBox(height: 48),
+              // Settings options
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  children: [
+                    _buildSettingItem(
+                      icon: Icons.person_outline,
+                      title: '個人資料',
+                      onTap: () {},
                     ),
-                  ),
-                ],
+                    _buildSettingItem(
+                      icon: Icons.payment_outlined,
+                      title: '付款方式',
+                      onTap: () {},
+                    ),
+                    _buildSettingItem(
+                      icon: Icons.notifications_outlined,
+                      title: '通知設定',
+                      onTap: () {},
+                    ),
+                    _buildSettingItem(
+                      icon: Icons.history,
+                      title: '搭乘紀錄',
+                      onTap: () {},
+                    ),
+                    _buildSettingItem(
+                      icon: Icons.help_outline,
+                      title: '幫助中心',
+                      onTap: () {},
+                    ),
+                    _buildSettingItem(
+                      icon: Icons.info_outline,
+                      title: '關於我們',
+                      onTap: () {},
+                    ),
+                    const Divider(height: 32),
+                    _buildSettingItem(
+                      icon: Icons.logout,
+                      title: '登出',
+                      isDestructive: true,
+                      onTap: () => _handleLogout(context),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  static Widget _buildSettingsItem({
+  Widget _buildSettingItem({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    bool isDestructive = false,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+    final color = isDestructive ? AppColors.error : AppColors.textPrimary;
+
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: color,
+          fontSize: 16,
+        ),
       ),
-      child: ListTile(
-        leading: Icon(icon, color: AppColors.primary),
-        title: Text(title, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textHint),
-        onTap: onTap,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      trailing: Icon(
+        Icons.chevron_right,
+        color: isDestructive ? AppColors.error : AppColors.textSecondary,
+      ),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    );
+  }
+
+  void _handleLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('確認登出'),
+        content: const Text('確定要登出嗎？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.go(Routes.login);
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.error,
+            ),
+            child: const Text('登出'),
+          ),
+        ],
       ),
     );
   }
