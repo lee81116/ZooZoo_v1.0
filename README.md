@@ -97,6 +97,8 @@ flutter --version
 ```bash
 flutter doctor
 ```
+### 4.  Unity 
+使用版本 2022.3.62f3 (https://unity.com/releases/editor/archive)
 
 確認所有項目都打勾 ✓，如果有問題會顯示修復建議。
 
