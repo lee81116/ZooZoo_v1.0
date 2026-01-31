@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../history/presentation/pages/driver_history_page.dart';
 import '../../../settings/presentation/pages/driver_settings_page.dart';
+import '../../bloc/driver_bloc.dart';
+import '../../data/driver_state.dart';
 import 'driver_home_page.dart';
 
 /// Driver main container with swipeable pages
@@ -35,26 +38,36 @@ class _DriverMainPageState extends State<DriverMainPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch status to show/hide nav buttons
+    final status = context.watch<DriverBloc>().state.status;
+    final isOffline = status == DriverStatus.offline;
+
     return Scaffold(
+      backgroundColor: Colors.black, // Background color for gaps
       body: Stack(
         children: [
           // Swipeable pages
           PageView(
             controller: _pageController,
             onPageChanged: _onPageChanged,
-            children: [
-              DriverHistoryPage(),    // Left: History
-              DriverHomePage(),       // Center: Home
-              DriverSettingsPage(),   // Right: Settings
+            physics: isOffline
+                ? const BouncingScrollPhysics()
+                : const NeverScrollableScrollPhysics(),
+            children: const [
+              DriverHistoryPage(), // Left: History
+              DriverHomePage(), // Center: Home
+              DriverSettingsPage(), // Right: Settings
             ],
           ),
-          // Page indicator
-          Positioned(
-            bottom: 50,
-            left: 0,
-            right: 0,
-            child: _buildPageIndicator(),
-          ),
+
+          // Page indicator (Only show when offline/swipeable)
+          if (isOffline)
+            Positioned(
+              bottom: 50,
+              left: 0,
+              right: 0,
+              child: _buildPageIndicator(),
+            ),
         ],
       ),
     );
@@ -71,9 +84,7 @@ class _DriverMainPageState extends State<DriverMainPage> {
           width: isActive ? 24 : 8,
           height: 8,
           decoration: BoxDecoration(
-            color: isActive 
-                ? Colors.white 
-                : Colors.white.withOpacity(0.4),
+            color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
             borderRadius: BorderRadius.circular(4),
           ),
         );
