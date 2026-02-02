@@ -1069,19 +1069,14 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
             ),
             child: GestureDetector(
               onTap: () {
-                Navigator.pop(context);
-                // Navigate to waiting for driver page with location data
-                context.push(
-              onTap: () async {
                 final priceDog = _calculatePrice('元氣汪汪');
                 final priceCat = _calculatePrice('招財貓貓');
                 final priceBear = _calculatePrice('北極熊阿北');
 
                 Navigator.pop(context);
 
-                // Return result=true to signal completion and trigger reset
-                // Await result to handle auto-reset when trip completes
-                final result = await context.push(
+                // Navigate to waiting page
+                context.push(
                   Routes.passengerBooking,
                   extra: {
                     'userLocation': AppLatLng(
@@ -1104,10 +1099,9 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                     ][_selectedVehicleIndex],
                   },
                 );
-                // If trip completed (result == true), reset the route
-                if (result == true) {
-                  _clearRoute();
-                }
+
+                // IMMEDIATELY reset home page state
+                _clearRoute();
               },
               child: Container(
                 width: double.infinity,
