@@ -32,7 +32,7 @@ class WeeklyEarningsChart extends StatelessWidget {
     // ... (rest of the build method equivalent logic, ensuring imports are safe)
     final sortedKeys = dailyEarnings.keys.toList()
       ..sort((a, b) => a.compareTo(b));
-    
+
     double maxEarning = 0;
     for (var earning in dailyEarnings.values) {
       if (earning > maxEarning) maxEarning = earning.toDouble();
@@ -40,12 +40,13 @@ class WeeklyEarningsChart extends StatelessWidget {
     // Ensure maxY is at least the dailyGoal + buffer
     final double goalDouble = dailyGoal.toDouble();
     if (goalDouble > maxEarning) maxEarning = goalDouble;
-    
+
     maxEarning = maxEarning == 0 ? 100 : maxEarning * 1.2;
 
     // Date Range String: "M/d - M/d"
     final weekEnd = weekStartDate.add(const Duration(days: 6));
-    final dateRange = '${DateFormat('M/d').format(weekStartDate)} - ${DateFormat('M/d').format(weekEnd)}';
+    final dateRange =
+        '${DateFormat('M/d').format(weekStartDate)} - ${DateFormat('M/d').format(weekEnd)}';
 
     return GestureDetector(
       onHorizontalDragEnd: (details) {
@@ -88,14 +89,15 @@ class WeeklyEarningsChart extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '目標 ¥$dailyGoal',
+                            '目標 \$$dailyGoal',
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.edit, size: 12, color: AppColors.textHint),
+                          const Icon(Icons.edit,
+                              size: 12, color: AppColors.textHint),
                         ],
                       ),
                     ),
@@ -113,7 +115,8 @@ class WeeklyEarningsChart extends StatelessWidget {
                 TextButton(
                   onPressed: onToday,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     backgroundColor: AppColors.primary.withOpacity(0.1),
@@ -145,7 +148,7 @@ class WeeklyEarningsChart extends StatelessWidget {
                         final date = sortedKeys[group.x.toInt()];
                         final earning = dailyEarnings[date];
                         return BarTooltipItem(
-                          '¥$earning',
+                          '\$$earning',
                           const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -154,13 +157,16 @@ class WeeklyEarningsChart extends StatelessWidget {
                       },
                     ),
                     touchCallback: (FlTouchEvent event, barTouchResponse) {
-                      if (!event.isInterestedForInteractions ||
-                          barTouchResponse == null ||
+                      if (barTouchResponse == null ||
                           barTouchResponse.spot == null) {
                         return;
                       }
-                      if (event is FlTapUpEvent) {
-                        final index = barTouchResponse.spot!.touchedBarGroupIndex;
+                      // Handle both tap and touch events
+                      if (event is FlTapUpEvent ||
+                          event is FlPanEndEvent ||
+                          event is FlLongPressEnd) {
+                        final index =
+                            barTouchResponse.spot!.touchedBarGroupIndex;
                         if (index >= 0 && index < sortedKeys.length) {
                           onDaySelected(sortedKeys[index]);
                         }
@@ -179,7 +185,7 @@ class WeeklyEarningsChart extends StatelessWidget {
                           final date = sortedKeys[value.toInt()];
                           final isSelected = selectedDate != null &&
                               DateUtils.isSameDay(selectedDate, date);
-                          
+
                           // Check if goal reached for this day
                           final earning = dailyEarnings[date] ?? 0;
                           final isGoalReached = earning >= dailyGoal;
@@ -190,7 +196,9 @@ class WeeklyEarningsChart extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  DateFormat('E', 'zh_TW').format(date).replaceAll('週', ''),
+                                  DateFormat('E', 'zh_TW')
+                                      .format(date)
+                                      .replaceAll('週', ''),
                                   style: TextStyle(
                                     color: isSelected
                                         ? AppColors.primary
@@ -207,7 +215,8 @@ class WeeklyEarningsChart extends StatelessWidget {
                                     width: 4,
                                     height: 4,
                                     decoration: const BoxDecoration(
-                                      color: AppColors.warning, // Glowing/Gold color
+                                      color: AppColors
+                                          .warning, // Glowing/Gold color
                                       shape: BoxShape.circle,
                                     ),
                                   ),
@@ -257,7 +266,7 @@ class WeeklyEarningsChart extends StatelessWidget {
                     final earning = dailyEarnings[date] ?? 0;
                     final isSelected = selectedDate != null &&
                         DateUtils.isSameDay(selectedDate, date);
-                    
+
                     final isGoalReached = earning >= dailyGoal;
 
                     return BarChartGroupData(
@@ -266,9 +275,10 @@ class WeeklyEarningsChart extends StatelessWidget {
                         BarChartRodData(
                           toY: earning.toDouble(),
                           color: isGoalReached
-                              ? AppColors.warning // Glowing/Gold color if goal reached
-                              : (isSelected 
-                                  ? AppColors.primary 
+                              ? AppColors
+                                  .warning // Glowing/Gold color if goal reached
+                              : (isSelected
+                                  ? AppColors.primary
                                   : AppColors.primary.withOpacity(0.3)),
                           width: 30,
                           borderRadius: const BorderRadius.vertical(
