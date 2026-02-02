@@ -158,8 +158,10 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     // Initialize route layer BEFORE annotations (ensures route is below markers)
     const routeSourceId = 'route-source';
     const routeLayerId = 'navigation-route';
-    const emptyGeoJson = '{"type":"Feature","geometry":{"type":"LineString","coordinates":[]}}';
-    await mapboxMap.style.addSource(GeoJsonSource(id: routeSourceId, data: emptyGeoJson));
+    const emptyGeoJson =
+        '{"type":"Feature","geometry":{"type":"LineString","coordinates":[]}}';
+    await mapboxMap.style
+        .addSource(GeoJsonSource(id: routeSourceId, data: emptyGeoJson));
     await mapboxMap.style.addLayer(LineLayer(
       id: routeLayerId,
       sourceId: routeSourceId,
@@ -224,7 +226,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       if ((coords.lng - friend.lng).abs() < 0.0001 &&
           (coords.lat - friend.lat).abs() < 0.0001) {
         // Navigate to friend without showing red pin (friend marker already exists)
-        _drawNavigationRoute(friend.lat, friend.lng, friend.name, showMarker: false);
+        _drawNavigationRoute(friend.lat, friend.lng, friend.name,
+            showMarker: false);
         break;
       }
     }
@@ -300,8 +303,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       try {
         // Create emoji marker image (balanced size)
         const markerSize = 110;
-        final imageData =
-            await _createEmojiMarkerImage(friend.emoji, friend.color, markerSize);
+        final imageData = await _createEmojiMarkerImage(
+            friend.emoji, friend.color, markerSize);
 
         // Add image to map style
         await _mapboxMap!.style.addStyleImage(
@@ -412,7 +415,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                         GlassIconButton(
                           icon: Icons.settings_outlined,
                           iconColor: Colors.white,
-                          onPressed: () => context.push(Routes.passengerSettings),
+                          onPressed: () =>
+                              context.push(Routes.passengerSettings),
                         ),
                         const SizedBox(height: 12),
                         // Recenter Button (Top Right)
@@ -452,135 +456,135 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                       children: [
                         // Handle
                         const SizedBox(height: 12),
-                          Container(
-                            width: 40,
-                            height: 4,
+                        Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Search Bar (Dark Theme - Solid Background)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Container(
+                            height: 48,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Search Bar (Dark Theme - Solid Background)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Container(
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: AppColors.surfaceDark,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: AppColors.dividerDark,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const SizedBox(width: 12),
-                                  _isSearching
-                                      ? const SizedBox(
-                                          width: 22,
-                                          height: 22,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppColors.primary,
-                                          ),
-                                        )
-                                      : const Icon(Icons.search,
-                                          color: AppColors.primary, size: 22),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _searchController,
-                                      focusNode: _searchFocusNode,
-                                      cursorColor: AppColors.primary,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                      ),
-                                      decoration: const InputDecoration(
-                                        hintText: '搜尋目的地',
-                                        hintStyle: TextStyle(
-                                          color: AppColors.textHintDark,
-                                          fontSize: 16,
-                                        ),
-                                        filled: false,
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                        contentPadding: EdgeInsets.zero,
-                                        isDense: true,
-                                      ),
-                                      onSubmitted: _handleSearch,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                ],
+                              color: AppColors.surfaceDark,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.dividerDark,
+                                width: 1,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // History Card 1
-                          _buildHistoryCard(
-                            icon: Icons.history,
-                            address: '忠孝東路四段299號',
-                            lat: 25.0418,
-                            lng: 121.5548,
-                          ),
-                          const SizedBox(height: 8),
-
-                          // History Card 2
-                          _buildHistoryCard(
-                            icon: Icons.history,
-                            address: '木柵路一段315號',
-                            lat: 24.9902,
-                            lng: 121.5702,
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // Quick Actions (家, 公司, 最愛) - Rounded Rectangles
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Row(
                               children: [
+                                const SizedBox(width: 12),
+                                _isSearching
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.primary,
+                                        ),
+                                      )
+                                    : const Icon(Icons.search,
+                                        color: AppColors.primary, size: 22),
+                                const SizedBox(width: 12),
                                 Expanded(
-                                  child: _buildQuickActionCard(
-                                    icon: Icons.home,
-                                    label: '家',
-                                    onTap: () =>
-                                        context.push(Routes.passengerBooking),
+                                  child: TextField(
+                                    controller: _searchController,
+                                    focusNode: _searchFocusNode,
+                                    cursorColor: AppColors.primary,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                    decoration: const InputDecoration(
+                                      hintText: '搜尋目的地',
+                                      hintStyle: TextStyle(
+                                        color: AppColors.textHintDark,
+                                        fontSize: 16,
+                                      ),
+                                      filled: false,
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                      isDense: true,
+                                    ),
+                                    onSubmitted: _handleSearch,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildQuickActionCard(
-                                    icon: Icons.business,
-                                    label: '公司',
-                                    onTap: () {},
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildQuickActionCard(
-                                    icon: Icons.favorite,
-                                    label: '最愛',
-                                    onTap: () {},
-                                  ),
-                                ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 24),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // History Card 1
+                        _buildHistoryCard(
+                          icon: Icons.history,
+                          address: '忠孝東路四段299號',
+                          lat: 25.0418,
+                          lng: 121.5548,
+                        ),
+                        const SizedBox(height: 8),
+
+                        // History Card 2
+                        _buildHistoryCard(
+                          icon: Icons.history,
+                          address: '木柵路一段315號',
+                          lat: 24.9902,
+                          lng: 121.5702,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Quick Actions (家, 公司, 最愛) - Rounded Rectangles
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildQuickActionCard(
+                                  icon: Icons.home,
+                                  label: '家',
+                                  onTap: () =>
+                                      context.push(Routes.passengerBooking),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildQuickActionCard(
+                                  icon: Icons.business,
+                                  label: '公司',
+                                  onTap: () {},
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildQuickActionCard(
+                                  icon: Icons.favorite,
+                                  label: '最愛',
+                                  onTap: () {},
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
+          ),
 
           // 4. Confirm & Cancel Buttons (Bottom, when route is active)
           if (_isRouteSelected)
@@ -596,7 +600,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                     onVerticalDragUpdate: (details) {
                       setState(() {
                         _cancelRevealOffset -= details.delta.dy;
-                        _cancelRevealOffset = _cancelRevealOffset.clamp(0.0, 80.0);
+                        _cancelRevealOffset =
+                            _cancelRevealOffset.clamp(0.0, 80.0);
                         if (_cancelRevealOffset > 40) {
                           _isCancelRevealed = true;
                         }
@@ -610,7 +615,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                     onTap: _showVehicleSelectionSheet,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 100),
-                      transform: Matrix4.translationValues(0, -_cancelRevealOffset * 0.5, 0),
+                      transform: Matrix4.translationValues(
+                          0, -_cancelRevealOffset * 0.5, 0),
                       child: Container(
                         width: double.infinity,
                         height: 60,
@@ -767,7 +773,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                       price: 'NT\$120',
                       time: '3 分鐘',
                       isSelected: _selectedVehicleIndex == 0,
-                      onTap: () => setSheetState(() => _selectedVehicleIndex = 0),
+                      onTap: () =>
+                          setSheetState(() => _selectedVehicleIndex = 0),
                     ),
                     _buildVehicleOption(
                       name: '招財貓貓',
@@ -775,7 +782,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                       price: 'NT\$150',
                       time: '5 分鐘',
                       isSelected: _selectedVehicleIndex == 1,
-                      onTap: () => setSheetState(() => _selectedVehicleIndex = 1),
+                      onTap: () =>
+                          setSheetState(() => _selectedVehicleIndex = 1),
                     ),
                     _buildVehicleOption(
                       name: '北極熊阿北',
@@ -783,7 +791,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                       price: 'NT\$200',
                       time: '8 分鐘',
                       isSelected: _selectedVehicleIndex == 2,
-                      onTap: () => setSheetState(() => _selectedVehicleIndex = 2),
+                      onTap: () =>
+                          setSheetState(() => _selectedVehicleIndex = 2),
                     ),
                   ],
                 );
@@ -814,7 +823,11 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                       _selectedDestLat ?? _defaultLat,
                       _selectedDestLng ?? _defaultLng,
                     ),
-                    'vehicleType': ['元氣汪汪', '招財貓貓', '北極熊阿北'][_selectedVehicleIndex],
+                    'vehicleType': [
+                      '元氣汪汪',
+                      '招財貓貓',
+                      '北極熊阿北'
+                    ][_selectedVehicleIndex],
                     'price': [120, 150, 200][_selectedVehicleIndex],
                   },
                 );
@@ -869,46 +882,46 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
           ),
         ),
         child: Row(
-        children: [
-          // Emoji
-          Text(emoji, style: const TextStyle(fontSize: 36)),
-          const SizedBox(width: 16),
+          children: [
+            // Emoji
+            Text(emoji, style: const TextStyle(fontSize: 36)),
+            const SizedBox(width: 16),
 
-          // Name and time
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+            // Name and time
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '預計 $time 抵達',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 13,
+                  const SizedBox(height: 4),
+                  Text(
+                    '預計 $time 抵達',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          // Price
-          Text(
-            price,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+            // Price
+            Text(
+              price,
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -1077,7 +1090,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   /// Clear route and reset to search mode
   Future<void> _clearRoute() async {
     const sourceId = 'route-source';
-    const emptyGeoJson = '{"type":"Feature","geometry":{"type":"LineString","coordinates":[]}}';
+    const emptyGeoJson =
+        '{"type":"Feature","geometry":{"type":"LineString","coordinates":[]}}';
 
     try {
       // Clear route by setting empty data (keep layer intact for z-order)
@@ -1258,7 +1272,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        height: 280,
+        height: 220,
         decoration: const BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1313,17 +1327,6 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                   ),
                 );
               }).toList(),
-            ),
-            const SizedBox(height: 32),
-            // Logout Option
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                context.go(Routes.login);
-              },
-              icon: const Icon(Icons.logout, color: AppColors.error),
-              label: const Text('登出',
-                  style: TextStyle(color: AppColors.error, fontSize: 16)),
             ),
           ],
         ),
