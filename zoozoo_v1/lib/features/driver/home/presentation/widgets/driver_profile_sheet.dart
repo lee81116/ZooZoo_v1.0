@@ -43,10 +43,13 @@ class DriverProfileSheet extends StatelessWidget {
           ListTile(
             leading: Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle),
               child: const Icon(Icons.calculate, color: AppColors.primary),
             ),
-            title: const Text('我的財務導航', style: TextStyle(fontWeight: FontWeight.bold)),
+            title: const Text('我的財務導航',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             subtitle: const Text('設定目標與成本'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () {
@@ -55,21 +58,23 @@ class DriverProfileSheet extends StatelessWidget {
             },
           ),
           const Spacer(),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  context.read<DriverBloc>().goOffline();
-                  Navigator.pop(context);
-                  context.go('/login');
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-                child: const Text('登出'),
-              ),
-            ),
-          ),
+          // Padding(
+          //   padding: const EdgeInsets.all(24),
+          //   child: SizedBox(
+          //     width: double.infi
+          // nity,
+          //     child: ElevatedButton(
+          //       onPressed: () {
+          //         context.read<DriverBloc>().goOffline();
+          //         Navigator.pop(context);
+          //         context.go('/login');
+          //       },
+          //       style:
+          //           ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+          //       child: const Text('登出'),
+          //     ),
+          //   ),
+          // ),
         ],
       ),
     );

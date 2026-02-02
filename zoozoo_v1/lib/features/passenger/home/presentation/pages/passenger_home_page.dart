@@ -1548,7 +1548,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        height: 280,
+        height: 220,
         decoration: const BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1603,17 +1603,6 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                   ),
                 );
               }).toList(),
-            ),
-            const SizedBox(height: 32),
-            // Logout Option
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                context.go(Routes.login);
-              },
-              icon: const Icon(Icons.logout, color: AppColors.error),
-              label: const Text('登出',
-                  style: TextStyle(color: AppColors.error, fontSize: 16)),
             ),
           ],
         ),

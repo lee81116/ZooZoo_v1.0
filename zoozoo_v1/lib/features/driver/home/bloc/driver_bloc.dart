@@ -9,6 +9,7 @@ import '../../../../core/services/order/order_storage_service.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/services/voice/voice_assistant_service.dart';
 import '../../../../core/services/notification/notification_service.dart';
+import '../../../../core/services/chat_storage_service.dart';
 import '../data/driver_state.dart';
 
 /// Driver state manager (simplified BLoC pattern)
@@ -143,6 +144,14 @@ class DriverBloc extends ChangeNotifier {
 
     try {
       final order = await _orderService.acceptOrder(_state.currentOrder!.id);
+
+      // Create new chat room for this order
+      final chatStorage = ChatStorageService();
+      await chatStorage.clearMessages(
+          order.id); // Clear any existing messages for this order
+      await chatStorage
+          .setCurrentOrderId(order.id); // Set as current active order
+
       _state = _state.copyWith(
         status: DriverStatus.toPickup,
         currentOrder: order,
