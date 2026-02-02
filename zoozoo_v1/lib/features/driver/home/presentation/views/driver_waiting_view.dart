@@ -105,10 +105,10 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
             ),
           ),
 
-          // 3. Avatar & Tips (Bottom Left)
+          // 3. Avatar & Tips (Top Left)
           Positioned(
             left: _avatarLeft,
-            bottom: _avatarBottom,
+            top: _avatarBottom,
             child: GestureDetector(
               onPanStart: (_) {
                 setState(() {
@@ -118,7 +118,8 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
               onPanUpdate: (details) {
                 setState(() {
                   _avatarLeft += details.delta.dx;
-                  _avatarBottom -= details.delta.dy;
+                  _avatarBottom += details
+                      .delta.dy; // Changed from -= to += for top positioning
                 });
               },
               onPanEnd: (_) {
