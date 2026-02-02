@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math'; // For Random
 
 import 'dart:typed_data';
 
@@ -16,6 +17,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../pages/driver_chat_page.dart'; // Import the chat page
+import '../../../../../core/models/chat_message.dart';
+import '../../../../../core/services/chat_storage_service.dart';
 
 import '../../../../../core/models/order_model.dart';
 import '../../../../../core/theme/app_colors.dart';
@@ -68,6 +71,10 @@ class _DriverTripViewState extends State<DriverTripView>
   final FlutterTts _flutterTts = FlutterTts();
   // final stt.SpeechToText _speech = stt.SpeechToText(); // Removed unused
   final stt.SpeechToText _speech = stt.SpeechToText();
+
+  // --- Chat Storage Service ---
+  final ChatStorageService _chatStorage = ChatStorageService();
+
   // --- Navigation Mock State ---
   List<dynamic> _routeSteps = [];
   int _currentStepIndex = 0;
@@ -160,7 +167,17 @@ class _DriverTripViewState extends State<DriverTripView>
               heroTag: 'sim_msg_btn',
               mini: true,
               backgroundColor: Colors.white,
-              onPressed: () => _speakAndListen("請問還要多久會到？"),
+              onPressed: () {
+                // Randomly select one of three questions
+                final questions = [
+                  "請問還要多久會到？",
+                  "可以改地方上車嗎？",
+                  "我馬上下去，不好意思請等我一下",
+                ];
+                final randomQuestion =
+                    questions[Random().nextInt(questions.length)];
+                _speakAndListen(randomQuestion);
+              },
               child: const Icon(Icons.chat, color: Colors.blue),
             ),
           ),
@@ -653,6 +670,19 @@ class _DriverTripViewState extends State<DriverTripView>
   // --- Voice & Message Logic ---
 
   Future<void> _speakAndListen(String message) async {
+    // Get current order ID
+    final orderId = widget.state.currentOrder?.id;
+    if (orderId == null) return;
+
+    // 0. Save passenger's voice message to chat
+    final passengerMessage = ChatMessage.voice(
+      transcribedText: message,
+      voiceFilePath:
+          "/audio/passenger_${DateTime.now().millisecondsSinceEpoch}.m4a",
+      sender: MessageSender.passenger,
+    );
+    await _chatStorage.addMessage(passengerMessage, orderId);
+
     // 1. Announce
     await _flutterTts.speak("收到乘客訊息: $message");
     await _flutterTts.awaitSpeakCompletion(true);
@@ -682,13 +712,28 @@ class _DriverTripViewState extends State<DriverTripView>
         ));
       }
       _speech.listen(
-        onResult: (result) {
+        onResult: (result) async {
           if (result.finalResult) {
-            debugPrint("Reply: ${result.recognizedWords}");
+            final driverReply = result.recognizedWords;
+            debugPrint("Reply: $driverReply");
+
+            // Get current order ID
+            final orderId = widget.state.currentOrder?.id;
+            if (orderId != null) {
+              // Save driver's voice reply to chat
+              final driverMessage = ChatMessage.voice(
+                transcribedText: driverReply,
+                voiceFilePath:
+                    "/audio/driver_${DateTime.now().millisecondsSinceEpoch}.m4a",
+                sender: MessageSender.driver,
+              );
+              await _chatStorage.addMessage(driverMessage, orderId);
+            }
+
             // Simulate sending
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text("已回覆: ${result.recognizedWords}"),
+                content: Text("已回覆並儲存: $driverReply"),
                 backgroundColor: AppColors.success,
                 behavior: SnackBarBehavior.floating,
               ));
