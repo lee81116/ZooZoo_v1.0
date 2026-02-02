@@ -6,8 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../../../../app/router/app_router.dart';
 import '../../../../../core/services/map/map_models.dart';
 import '../../../../../core/services/map/mapbox_api_service.dart';
@@ -34,10 +32,9 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   static const _defaultLat = 25.0330;
   static const _defaultLng = 121.5654;
 
-  // Avatar Selection
-  static const List<String> _avatarEmojis = ['😀', '😎', '🐱', '🐶', '🦊'];
-  String _selectedAvatar = '😀';
-  static const String _avatarPrefKey = 'passenger_avatar';
+  // Location Visibility Mode
+  _LocationMode _currentLocationMode = _LocationMode.public;
+  bool _isLocationMenuExpanded = false;
 
   // Search
   final TextEditingController _searchController = TextEditingController();
@@ -66,7 +63,6 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   @override
   void initState() {
     super.initState();
-    _loadAvatar();
     _fetchInitialLocation();
   }
 
@@ -75,20 +71,6 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadAvatar() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_avatarPrefKey);
-    if (saved != null && _avatarEmojis.contains(saved)) {
-      setState(() => _selectedAvatar = saved);
-    }
-  }
-
-  Future<void> _saveAvatar(String emoji) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_avatarPrefKey, emoji);
-    setState(() => _selectedAvatar = emoji);
   }
 
   /// Fetch initial location before showing map
@@ -376,35 +358,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Row(
                   children: [
-                    // Profile Avatar Icon
-                    GestureDetector(
-                      onTap: () => _showProfileSheet(context),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            _selectedAvatar,
-                            style: const TextStyle(fontSize: 24),
-                          ),
-                        ),
-                      ),
-                    ),
+                    // Location Visibility Toggle
+                    _buildLocationVisibilityToggle(),
                     const Spacer(),
                     // Settings Gear Icon + Recenter Button (vertical column)
                     Column(
@@ -721,6 +676,260 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     );
   }
 
+<<<<<<< Updated upstream
+=======
+  // --- 3D Model & Lighting Methods ---
+
+  /// Configure lighting for Mapbox Standard Style
+  Future<void> _setupLighting() async {
+    if (_mapboxMap == null) return;
+    try {
+      await _mapboxMap!.style.setStyleImportConfigProperty(
+        "basemap",
+        "lightPreset",
+        "dusk",
+      );
+      debugPrint("Map lighting configured to 'dusk'");
+    } catch (e) {
+      debugPrint("Failed to set map lighting: $e");
+    }
+  }
+
+  /// Try to setup 3D car model
+  Future<void> _trySetup3DCarModel() async {
+    if (_mapboxMap == null) return;
+
+    // Use initial location
+    final lat = _initialLat ?? _defaultLat;
+    final lng = _initialLng ?? _defaultLng;
+
+    try {
+      debugPrint('Loading car model to temp file...');
+      final modelUri =
+          await _loadModelToTempFile(_carModelAssetPath, 'car.glb');
+
+      // Add model to style
+      await _mapboxMap!.style.addStyleModel(
+        _carModelId,
+        modelUri,
+      );
+
+      // Create GeoJSON source
+      final geoJson = _createPointGeoJson(lat, lng, 0); // bearing 0
+      await _mapboxMap!.style.addSource(
+        GeoJsonSource(id: _carSourceId, data: jsonEncode(geoJson)),
+      );
+
+      // Create ModelLayer
+      await _mapboxMap!.style.addLayer(
+        ModelLayer(
+          id: _carLayerId,
+          sourceId: _carSourceId,
+          modelId: _carModelId,
+          modelScale: [35.0, 35.0, 35.0],
+          modelRotation: [0.0, 0.0, _modelCalibration],
+          modelTranslation: [0.0, 0.0, 1.0],
+        ),
+      );
+
+      // Enable model animation
+      try {
+        await _mapboxMap!.style.setStyleLayerProperty(
+          _carLayerId,
+          'model-animation-enabled',
+          true,
+        );
+      } catch (_) {}
+
+      _using3DCarModel = true;
+      debugPrint('3D car model setup successful on Home Page!');
+    } catch (e) {
+      debugPrint('3D car model setup failed: $e');
+      _using3DCarModel = false;
+
+      // Fallback: Enable default location puck if 3D fails
+      await _mapboxMap!.location.updateSettings(LocationComponentSettings(
+        enabled: true,
+        pulsingEnabled: true,
+      ));
+    }
+  }
+
+  Future<String> _loadModelToTempFile(String assetPath, String tempName) async {
+    final byteData = await rootBundle.load(assetPath);
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/$tempName');
+    await file.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+    return 'file://${file.path}';
+  }
+
+  Map<String, dynamic> _createPointGeoJson(
+      double lat, double lng, double bearing) {
+    return {
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [lng, lat],
+          },
+          'properties': {
+            'bearing': bearing,
+          },
+        },
+      ],
+    };
+  }
+
+  /// Update car position (if we need to move it)
+  Future<void> _updateCarPosition(
+      double lat, double lng, double bearing) async {
+    if (!_using3DCarModel || _mapboxMap == null) return;
+
+    try {
+      final geoJson = _createPointGeoJson(lat, lng, bearing);
+      await _mapboxMap!.style.setStyleSourceProperty(
+        _carSourceId,
+        'data',
+        jsonEncode(geoJson),
+      );
+
+      // Update rotation
+      await _mapboxMap!.style.setStyleLayerProperty(
+        _carLayerId,
+        'model-rotation',
+        [0.0, 0.0, bearing + _modelCalibration],
+      );
+    } catch (_) {}
+  }
+
+  /// Build location visibility toggle button (top-left)
+  Widget _buildLocationVisibilityToggle() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Calculate max expanded width: screen - padding(40) - buttons(48) - margin(16)
+    final maxExpandedWidth = (screenWidth - 40 - 48 - 16).clamp(180.0, 260.0);
+
+    return GestureDetector(
+      onTap: _isLocationMenuExpanded
+          ? null
+          : () => setState(() => _isLocationMenuExpanded = true),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        height: 48,
+        width: _isLocationMenuExpanded ? maxExpandedWidth : 48,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceDark.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.2),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: _isLocationMenuExpanded
+            ? _buildExpandedLocationMenu()
+            : _buildCollapsedLocationIcon(),
+      ),
+    );
+  }
+
+  /// Collapsed state: show only the current mode icon
+  Widget _buildCollapsedLocationIcon() {
+    return Center(
+      child: Icon(
+        _getLocationModeIcon(_currentLocationMode),
+        color: _getLocationModeColor(_currentLocationMode),
+        size: 24,
+      ),
+    );
+  }
+
+  /// Expanded state: show all three options
+  Widget _buildExpandedLocationMenu() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _buildLocationOption(_LocationMode.public, '公開'),
+        _buildLocationOption(_LocationMode.friends, '摯友'),
+        _buildLocationOption(_LocationMode.off, '關閉'),
+      ],
+    );
+  }
+
+  /// Individual option in expanded menu
+  Widget _buildLocationOption(_LocationMode mode, String label) {
+    final isSelected = _currentLocationMode == mode;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _currentLocationMode = mode;
+          _isLocationMenuExpanded = false;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? _getLocationModeColor(mode).withValues(alpha: 0.2)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getLocationModeIcon(mode),
+              color: _getLocationModeColor(mode),
+              size: 18,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color:
+                    isSelected ? _getLocationModeColor(mode) : Colors.white70,
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Get icon for location mode
+  IconData _getLocationModeIcon(_LocationMode mode) {
+    switch (mode) {
+      case _LocationMode.public:
+        return Icons.circle;
+      case _LocationMode.friends:
+        return Icons.star;
+      case _LocationMode.off:
+        return Icons.circle;
+    }
+  }
+
+  /// Get color for location mode
+  Color _getLocationModeColor(_LocationMode mode) {
+    switch (mode) {
+      case _LocationMode.public:
+      case _LocationMode.friends:
+        return Colors.lightGreenAccent;
+      case _LocationMode.off:
+        return Colors.grey;
+    }
+  }
+
+>>>>>>> Stashed changes
   /// Build vehicle selection sheet content
   Widget _buildVehicleSelectionSheet() {
     return Container(
@@ -801,8 +1010,18 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
             ),
             child: GestureDetector(
               onTap: () {
+<<<<<<< Updated upstream
                 Navigator.pop(context);
                 // Navigate to waiting for driver page with location data
+=======
+                final priceDog = _calculatePrice('元氣汪汪');
+                final priceCat = _calculatePrice('招財貓貓');
+                final priceBear = _calculatePrice('北極熊阿北');
+
+                Navigator.pop(context);
+
+                // Navigate to waiting page
+>>>>>>> Stashed changes
                 context.push(
                   Routes.passengerBooking,
                   extra: {
@@ -818,6 +1037,13 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                     'price': [120, 150, 200][_selectedVehicleIndex],
                   },
                 );
+<<<<<<< Updated upstream
+=======
+
+                // IMMEDIATELY reset home page state
+                // This ensures that whether we return via pop or GoRouter, the state is clean.
+                _clearRoute();
+>>>>>>> Stashed changes
               },
               child: Container(
                 width: double.infinity,
@@ -1252,84 +1478,13 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
     return byteData!.buffer.asUint8List();
   }
+}
 
-  void _showProfileSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: 280,
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              '選擇形象',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.accent,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: _avatarEmojis.map((emoji) {
-                final isSelected = emoji == _selectedAvatar;
-                return GestureDetector(
-                  onTap: () {
-                    _saveAvatar(emoji);
-                    Navigator.pop(ctx);
-                  },
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isSelected
-                          ? AppColors.primary.withValues(alpha: 0.3)
-                          : Colors.transparent,
-                      border: Border.all(
-                        color:
-                            isSelected ? AppColors.primary : Colors.transparent,
-                        width: 3,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(emoji, style: const TextStyle(fontSize: 32)),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 32),
-            // Logout Option
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(ctx);
-                context.go(Routes.login);
-              },
-              icon: const Icon(Icons.logout, color: AppColors.error),
-              label: const Text('登出',
-                  style: TextStyle(color: AppColors.error, fontSize: 16)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+/// Location visibility mode for the user
+enum _LocationMode {
+  public, // 公開 - Green circle
+  friends, // 摯友 - Green star
+  off, // 關閉 - Gray circle
 }
 
 class _MockFriend {
