@@ -6,10 +6,14 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'app/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/services/notification/notification_service.dart';
 import 'features/driver/home/bloc/driver_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize notification service
+  await NotificationService().init();
 
   // Initialize date formatting for zh_TW
   await initializeDateFormatting('zh_TW', null);

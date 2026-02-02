@@ -49,9 +49,6 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   double _statusOpacity = 0.0;
   Timer? _statusMessageTimer;
 
-  // Local state for background mode (visual only)
-  bool _isBackgroundModeOn = false;
-
   @override
   void initState() {
     super.initState();
@@ -557,11 +554,11 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.currency_yen,
+                    const Icon(Icons.attach_money,
                         color: AppColors.warning, size: 20),
                     const SizedBox(width: 8),
                     Text(
-                      '\$${state.todayEarnings}',
+                      '${state.todayEarnings}',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1031,16 +1028,19 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   }
 
   Widget _buildBackgroundModeButton() {
+    final isBackgroundModeOn = widget.state.isBackgroundModeOn;
+
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _isBackgroundModeOn = !_isBackgroundModeOn;
-        });
+        context.read<DriverBloc>().toggleBackgroundMode();
 
-        final message = _isBackgroundModeOn ? '背景模式已開啟' : '背景模式已關閉';
+        // Get new state (toggle happened synchronously in Bloc)
+        final newState = !isBackgroundModeOn;
+
+        final message = newState ? '背景模式已開啟' : '背景模式已關閉';
         _showStatusMessage(message);
 
-        if (_isBackgroundModeOn) {
+        if (newState) {
           // Delay briefly to show the message
           Future.delayed(const Duration(milliseconds: 500), () async {
             if (Platform.isAndroid) {
@@ -1066,19 +1066,19 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: _isBackgroundModeOn
+          color: isBackgroundModeOn
               ? AppColors.success.withOpacity(0.1)
               : AppColors.background,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: _isBackgroundModeOn ? AppColors.success : AppColors.divider,
+            color: isBackgroundModeOn ? AppColors.success : AppColors.divider,
             width: 1.5,
           ),
         ),
         child: Text(
-          _isBackgroundModeOn ? '背景模式 ON' : '背景模式',
+          isBackgroundModeOn ? '背景模式 ON' : '背景模式',
           style: TextStyle(
-            color: _isBackgroundModeOn
+            color: isBackgroundModeOn
                 ? AppColors.success
                 : AppColors.textSecondary,
             fontSize: 13,
