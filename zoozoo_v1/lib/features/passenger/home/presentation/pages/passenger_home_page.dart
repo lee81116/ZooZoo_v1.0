@@ -1,10 +1,14 @@
 import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart' as geo;
+import 'dart:io';
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -63,11 +67,26 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   // Friend markers data for click handling
   List<_MockFriend> _friends = [];
 
+  // 3D Model configuration - Car
+  static const _carModelAssetPath = 'assets/3dmodels/base_basic_pbr.glb';
+  static const _carModelId = 'car-3d-model';
+  static const _carSourceId = 'car-source';
+  static const _carLayerId = 'car-layer';
+  bool _using3DCarModel = false;
+  static const _modelCalibration = 180.0;
+
+  double _currentRouteDistanceMeters = 0;
+
   @override
   void initState() {
     super.initState();
     _loadAvatar();
     _fetchInitialLocation();
+
+    // Ensure route is cleared when entering the page (e.g. returning from a completed trip)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _clearRoute();
+    });
   }
 
   @override
@@ -135,10 +154,12 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     MapboxOptions.setAccessToken(
         'pk.eyJ1IjoibGVlODExMTYiLCJhIjoiY21rZjRiMzV5MGV1aDNkb2dzd2J0aGVpNyJ9.khYanFeyddvuxj4ZWqzCyA');
 
-    // Enable Location Component (Blue Puck)
+    // Enable Location Component (Green Puck by default in Standard Style)
     await mapboxMap.location.updateSettings(LocationComponentSettings(
       enabled: true,
       pulsingEnabled: true,
+      pulsingColor: Colors.green.value,
+      puckBearingEnabled: true,
     ));
 
     // Hide Scale Bar
@@ -155,7 +176,10 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       marginLeft: -100,
     ));
 
-    // Initialize route layer BEFORE annotations (ensures route is below markers)
+    // Setup Lighting (Dusk)
+    await _setupLighting();
+
+    // Initialize route layer
     const routeSourceId = 'route-source';
     const routeLayerId = 'navigation-route';
     const emptyGeoJson =
@@ -165,23 +189,30 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     await mapboxMap.style.addLayer(LineLayer(
       id: routeLayerId,
       sourceId: routeSourceId,
-      lineColor: Colors.white.toARGB32(),
-      lineWidth: 5.0,
+      lineColor: const Color(0xFFADD8E6).value, // Light Blue matching 3D page
+      lineWidth: 8.0,
       lineCap: LineCap.ROUND,
       lineJoin: LineJoin.ROUND,
+      lineEmissiveStrength: 1.0,
     ));
 
-    // Create Annotation Manager (after route layer, so annotations are on top)
+    // Create Annotation Manager
     _pointAnnotationManager =
         await mapboxMap.annotations.createPointAnnotationManager();
 
-    // Add click listener for friend markers
+    // Add click listener
     // ignore: deprecated_member_use
     _pointAnnotationManager!.addOnPointAnnotationClickListener(
       _FriendMarkerClickListener(onTap: _handleFriendMarkerTap),
     );
 
-    // Add Friend Markers around initial location (no extra fly needed)
+    // Note: Do NOT setup 3D Car Model initially. User wants Green Dot.
+    // We will only show Car when in "Navigation/Route Preview" mode if needed,
+    // or arguably just keep the dot until the actual 3D Map Page starts.
+    // For now, disabling auto-setup of 3D car.
+    // await _trySetup3DCarModel();
+
+    // Add Friend Markers
     await _addFriendMarkers(_initialLat!, _initialLng!);
   }
 
@@ -216,6 +247,10 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
 
     // Add Friend Markers around user location
     await _addFriendMarkers(userLat, userLng);
+
+    // Update 3D Car Position
+    await _updateCarPosition(
+        userLat, userLng, 0); // Reset bearing or keep current? 0 for now
   }
 
   /// Handle tap on friend marker
@@ -364,7 +399,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
               ),
               zoom: 15.0,
             ),
-            styleUri: MapboxStyles.DARK,
+            styleUri: MapboxStyles.STANDARD,
             onMapCreated: _onMapCreated,
           ),
 
@@ -554,8 +589,13 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                                 child: _buildQuickActionCard(
                                   icon: Icons.home,
                                   label: '家',
-                                  onTap: () =>
-                                      context.push(Routes.passengerBooking),
+                                  onTap: () {
+                                    _drawNavigationRoute(
+                                      25.1321,
+                                      121.4986,
+                                      'No. 251, Guangming Rd., Beitou Dist., Taipei City 112022, Taiwan (R.O.C.)',
+                                    );
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -563,7 +603,11 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                                 child: _buildQuickActionCard(
                                   icon: Icons.business,
                                   label: '公司',
-                                  onTap: () {},
+                                  onTap: () => _drawNavigationRoute(
+                                    25.0339,
+                                    121.5644,
+                                    '台北101',
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -727,10 +771,136 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     );
   }
 
+  // --- 3D Model & Lighting Methods ---
+
+  /// Configure lighting for Mapbox Standard Style
+  Future<void> _setupLighting() async {
+    if (_mapboxMap == null) return;
+    try {
+      await _mapboxMap!.style.setStyleImportConfigProperty(
+        "basemap",
+        "lightPreset",
+        "dusk",
+      );
+      debugPrint("Map lighting configured to 'dusk'");
+    } catch (e) {
+      debugPrint("Failed to set map lighting: $e");
+    }
+  }
+
+  /// Try to setup 3D car model
+  Future<void> _trySetup3DCarModel() async {
+    if (_mapboxMap == null) return;
+
+    // Use initial location
+    final lat = _initialLat ?? _defaultLat;
+    final lng = _initialLng ?? _defaultLng;
+
+    try {
+      debugPrint('Loading car model to temp file...');
+      final modelUri =
+          await _loadModelToTempFile(_carModelAssetPath, 'car.glb');
+
+      // Add model to style
+      await _mapboxMap!.style.addStyleModel(
+        _carModelId,
+        modelUri,
+      );
+
+      // Create GeoJSON source
+      final geoJson = _createPointGeoJson(lat, lng, 0); // bearing 0
+      await _mapboxMap!.style.addSource(
+        GeoJsonSource(id: _carSourceId, data: jsonEncode(geoJson)),
+      );
+
+      // Create ModelLayer
+      await _mapboxMap!.style.addLayer(
+        ModelLayer(
+          id: _carLayerId,
+          sourceId: _carSourceId,
+          modelId: _carModelId,
+          modelScale: [35.0, 35.0, 35.0],
+          modelRotation: [0.0, 0.0, _modelCalibration],
+          modelTranslation: [0.0, 0.0, 1.0],
+        ),
+      );
+
+      // Enable model animation
+      try {
+        await _mapboxMap!.style.setStyleLayerProperty(
+          _carLayerId,
+          'model-animation-enabled',
+          true,
+        );
+      } catch (_) {}
+
+      _using3DCarModel = true;
+      debugPrint('3D car model setup successful on Home Page!');
+    } catch (e) {
+      debugPrint('3D car model setup failed: $e');
+      _using3DCarModel = false;
+
+      // Fallback: Enable default location puck if 3D fails
+      await _mapboxMap!.location.updateSettings(LocationComponentSettings(
+        enabled: true,
+        pulsingEnabled: true,
+      ));
+    }
+  }
+
+  Future<String> _loadModelToTempFile(String assetPath, String tempName) async {
+    final byteData = await rootBundle.load(assetPath);
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/$tempName');
+    await file.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+    return 'file://${file.path}';
+  }
+
+  Map<String, dynamic> _createPointGeoJson(
+      double lat, double lng, double bearing) {
+    return {
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [lng, lat],
+          },
+          'properties': {
+            'bearing': bearing,
+          },
+        },
+      ],
+    };
+  }
+
+  /// Update car position (if we need to move it)
+  Future<void> _updateCarPosition(
+      double lat, double lng, double bearing) async {
+    if (!_using3DCarModel || _mapboxMap == null) return;
+
+    try {
+      final geoJson = _createPointGeoJson(lat, lng, bearing);
+      await _mapboxMap!.style.setStyleSourceProperty(
+        _carSourceId,
+        'data',
+        jsonEncode(geoJson),
+      );
+
+      // Update rotation
+      await _mapboxMap!.style.setStyleLayerProperty(
+        _carLayerId,
+        'model-rotation',
+        [0.0, 0.0, bearing + _modelCalibration],
+      );
+    } catch (_) {}
+  }
+
   /// Build vehicle selection sheet content
   Widget _buildVehicleSelectionSheet() {
     return Container(
-      height: MediaQuery.of(context).size.height * 0.5,
+      height: MediaQuery.of(context).size.height * 0.55,
       decoration: const BoxDecoration(
         color: AppColors.surfaceDark,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -764,14 +934,20 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
           Expanded(
             child: StatefulBuilder(
               builder: (context, setSheetState) {
+                // Calculate prices dynamically
+                final priceDog = _calculatePrice('元氣汪汪');
+                final priceCat = _calculatePrice('招財貓貓');
+                final priceBear = _calculatePrice('北極熊阿北');
+
                 return ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   children: [
                     _buildVehicleOption(
                       name: '元氣汪汪',
                       emoji: '🐕',
-                      price: 'NT\$120',
+                      price: 'NT\$$priceDog',
                       time: '3 分鐘',
+                      subtitle: '標準速速',
                       isSelected: _selectedVehicleIndex == 0,
                       onTap: () =>
                           setSheetState(() => _selectedVehicleIndex = 0),
@@ -779,8 +955,9 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                     _buildVehicleOption(
                       name: '招財貓貓',
                       emoji: '🐱',
-                      price: 'NT\$150',
+                      price: 'NT\$$priceCat',
                       time: '5 分鐘',
+                      subtitle: '尊榮速速',
                       isSelected: _selectedVehicleIndex == 1,
                       onTap: () =>
                           setSheetState(() => _selectedVehicleIndex = 1),
@@ -788,8 +965,9 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                     _buildVehicleOption(
                       name: '北極熊阿北',
                       emoji: '🐻‍❄️',
-                      price: 'NT\$200',
+                      price: 'NT\$$priceBear',
                       time: '8 分鐘',
+                      subtitle: '減碳速速',
                       isSelected: _selectedVehicleIndex == 2,
                       onTap: () =>
                           setSheetState(() => _selectedVehicleIndex = 2),
@@ -809,10 +987,16 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
               MediaQuery.of(context).padding.bottom + 20,
             ),
             child: GestureDetector(
-              onTap: () {
+              onTap: () async {
+                final priceDog = _calculatePrice('元氣汪汪');
+                final priceCat = _calculatePrice('招財貓貓');
+                final priceBear = _calculatePrice('北極熊阿北');
+
                 Navigator.pop(context);
-                // Navigate to waiting for driver page with location data
-                context.push(
+
+                // Return result=true to signal completion and trigger reset
+                // Await result to handle auto-reset when trip completes
+                final result = await context.push(
                   Routes.passengerBooking,
                   extra: {
                     'userLocation': AppLatLng(
@@ -828,9 +1012,18 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                       '招財貓貓',
                       '北極熊阿北'
                     ][_selectedVehicleIndex],
-                    'price': [120, 150, 200][_selectedVehicleIndex],
+                    'price': [
+                      priceDog,
+                      priceCat,
+                      priceBear
+                    ][_selectedVehicleIndex],
                   },
                 );
+
+                // If trip completed (result == true), reset the route
+                if (result == true) {
+                  _clearRoute();
+                }
               },
               child: Container(
                 width: double.infinity,
@@ -865,6 +1058,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     required String time,
     required bool isSelected,
     required VoidCallback onTap,
+    String? subtitle,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -912,14 +1106,33 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
               ),
             ),
 
-            // Price
-            Text(
-              price,
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            // Price & Subtitle
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  price,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  // Removed box decoration as requested
+                  Container(
+                    child: Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12, // Increased from 10 to 12 (+2)
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -1027,11 +1240,14 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       if (routeResult != null) {
         // Use real route geometry
         geoJson = routeResult.toGeoJson();
+        _currentRouteDistanceMeters = routeResult.distanceMeters;
         debugPrint(
             'Route: ${(routeResult.distanceMeters / 1000).toStringAsFixed(1)}km, '
             '${(routeResult.durationSeconds / 60).toStringAsFixed(0)}min');
       } else {
         // Fallback to straight line if API fails
+        _currentRouteDistanceMeters =
+            _calculateDistance(userLat, userLng, destLat, destLng);
         geoJson = '''
         {
           "type": "Feature",
@@ -1067,9 +1283,21 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
             ),
           ),
           zoom: 13.0,
+          pitch: 60.0, // Add pitch for 3D effect
         ),
         MapAnimationOptions(duration: 1500),
       );
+
+      // Update 3D Car to face destination (IF we were using car model)
+      // Since we are green dot now, we don't need to rotate the "car".
+      // User requested "Initial map... green dot".
+      // If we want to show car ONLY during route preview, we would set it up here.
+      // But user said "Initial map...".
+      // Let's stick to green dot unless specified otherwise for route preview.
+      // If we *did* want to show car here, we'd call _trySetup3DCarModel() and update position.
+      // For now, I'll comment out the car update to ensure green dot persists.
+      // final bearing = _calculateBearing(userLat, userLng, destLat, destLng);
+      // await _updateCarPosition(userLat, userLng, bearing);
 
       // Set route selected state
       if (mounted) {
@@ -1085,6 +1313,49 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     } catch (e) {
       debugPrint('Failed to draw navigation route: $e');
     }
+  }
+
+  double _calculateDistance(
+      double lat1, double lng1, double lat2, double lng2) {
+    final dLat = lat1 - lat2;
+    final dLng = lng1 - lng2;
+    return math.sqrt(dLat * dLat + dLng * dLng) * 111000;
+  }
+
+  double _calculateBearing(double lat1, double lng1, double lat2, double lng2) {
+    final dLng = (lng2 - lng1) * math.pi / 180;
+    final lat1Rad = lat1 * math.pi / 180;
+    final lat2Rad = lat2 * math.pi / 180;
+
+    final y = math.sin(dLng) * math.cos(lat2Rad);
+    final x = math.cos(lat1Rad) * math.sin(lat2Rad) -
+        math.sin(lat1Rad) * math.cos(lat2Rad) * math.cos(dLng);
+
+    var bearing = math.atan2(y, x) * 180 / math.pi;
+    return (bearing + 360) % 360;
+  }
+
+  int _calculatePrice(String type) {
+    // Formula: 85 + 7 * (dist - 1250)/200
+    // If dist < 1250, price = 85
+
+    // Safety check
+    if (_currentRouteDistanceMeters < 0) return 85;
+
+    double basePrice;
+    if (_currentRouteDistanceMeters <= 1250) {
+      basePrice = 85.0;
+    } else {
+      final extraDist = _currentRouteDistanceMeters - 1250;
+      final units = (extraDist / 200).ceil();
+      basePrice = 85.0 + 7 * units; // Updated logic: 7 TWD per unit
+    }
+
+    if (type == '招財貓貓') {
+      return (basePrice * 1.5).round();
+    }
+
+    return basePrice.round();
   }
 
   /// Clear route and reset to search mode
@@ -1116,7 +1387,11 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         _selectedDestinationName = null;
         _selectedDestLat = null;
         _selectedDestLng = null;
+        _currentRouteDistanceMeters = 0;
       });
+
+      // Fly back to user location
+      await _flyToUserLocation();
 
       // Return camera to user location
       if (_initialLat != null && _initialLng != null) {
@@ -1126,12 +1401,13 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
               coordinates: Position(_initialLng!, _initialLat!),
             ),
             zoom: 15.0,
+            pitch: 0.0,
           ),
           MapAnimationOptions(duration: 1000),
         );
       }
     } catch (e) {
-      debugPrint('Failed to clear route: $e');
+      debugPrint('Error clearing route: $e');
     }
   }
 
