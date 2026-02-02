@@ -1,47 +1,34 @@
-# Dynamic 3D Map Route
+# Implement Location Visibility Toggle
 
 ## Goal
-Ensure the **3D Map Ride Simulation** uses the actual Start (User Location) and Destination (Selected Location) chosen by the user, instead of hardcoded defaults.
+Replace the Profile/Avatar selection button (Top-Left) with a **Location Visibility Toggle**.
 
-## Data Flow
-1.  **PassengerHomePage**:
-    -   User selects Destination (Search/History/Friend).
-    -   Stores `_selectedDestLat`, `_selectedDestLng`.
-    -   On "Confirm Phone", passes `userLocation` (End for Driver) and `destinationLocation` (End for Ride) to `Routes.passengerBooking`.
-2.  **BookingMapPage (Waiting)**:
-    -   Accepts `userLocation` and `destinationLocation`.
-    -   Simulates Driver -> User (Start: Random, End: `userLocation`).
-    -   On Arrival, passes `userLocation` (Start for Ride) and `destinationLocation` (End for Ride) to `Routes.passenger3DMap`.
-3.  **Passenger3DMapPage**:
-    -   Accepts `startLocation` and `endLocation`.
-    -   Simulates Ride: `startLocation` -> `endLocation`.
+## Specifications
+1.  **Modes**:
+    -   **Public (公開)**: Default. Icon: Green Circle.
+    -   **Close Friends (摯友)**: Icon: Green Star (Five-pointed).
+    -   **Off (關閉)**: Icon: Gray Circle.
+2.  **Interaction**:
+    -   **Collapsed**: Shows only the current mode's icon.
+    -   **Expanded**: Animations open to the **Right**.
+    -   Displays text options: "公開", "摯友", "關閉".
+    -   Selecting an option updates the state and collapses the button.
 
 ## Proposed Changes
 
-### [MODIFY] [app_router.dart](file:///c:/Works/WinterProject/ZooZoo_v1.0/zoozoo_v1/lib/app/router/app_router.dart)
--   Update `passengerBooking` route to parse `extra` arguments:
-    -   `userLocation` (AppLatLng)
-    -   `destinationLocation` (AppLatLng)
-    -   `vehicleType` (String)
-    -   `price` (int)
-
 ### [MODIFY] [passenger_home_page.dart](file:///c:/Works/WinterProject/ZooZoo_v1.0/zoozoo_v1/lib/features/passenger/home/presentation/pages/passenger_home_page.dart)
--   In `_showVehicleSelectionSheet` -> `onTap`:
-    -   Construct `extra` map with `lat`/`lng` of destination and user.
-    -   Call `context.push(Routes.passengerBooking, extra: {...})`.
 
-### [MODIFY] [booking_map_page.dart](file:///c:/Works/WinterProject/ZooZoo_v1.0/zoozoo_v1/lib/features/passenger/booking/presentation/pages/booking_map_page.dart)
--   Add constructor arguments for locations and vehicle info.
--   Use `userLocation` property instead of hardcoded `_userLat`/`_userLng`.
--   In `_onDriverArrived`:
-    -   Pass `startLocation: widget.userLocation` and `endLocation: widget.destinationLocation` to `Routes.passenger3DMap`.
+#### 1. Fix Layout & Overflow
+-   **Problem**: The user-implemented `Stack` approach causes hit-testing issues (taps outside the 48px footprint are ignored) and visual overflow.
+-   **Solution**: Revert to using `AnimatedContainer` directly within the `Row`. The `Spacer()` widget between the Toggle and the Right Buttons will automatically adjust (shrink) to accommodate the expanded toggle.
+-   **Dimensions**: Increase expanded width to `260` or `280` to prevent "Right Overflowed" warnings on the inner content.
 
-### [MODIFY] [passenger_3d_map_page.dart](file:///c:/Works/WinterProject/ZooZoo_v1.0/zoozoo_v1/lib/features/passenger/home/presentation/pages/passenger_3d_map_page.dart)
--   (Ideally already set up, but verify `_fetchRoute` uses `_startLocation`/`_endLocation`).
+#### 2. Fix Tapping/Selection
+-   By removing the `Stack` and allowing the widget to take actual layout space, taps on the expanded options (now within the widget's bounds) will be correctly detected.
+-   Ensure `setState` is called on option selection to update the `_currentLocationMode`.
 
 ## Verification
-1.  Select a specific destination (e.g., Friend).
-2.  Confirm booking.
-3.  Wait for driver (Driver -> You).
-4.  Simulation starts (You -> Friend).
-5.  Verify the path matches the real locations.
+1.  Launch App -> Top left shows Green Circle.
+2.  Tap Icon -> Expands right (pushes spacer), showing "公開 | 摯友 | 關閉".
+3.  **Visual Check**: No yellow/black overflow stripes.
+4.  **Interaction Check**: Tapping "摯友" (on the far right) correctly registers, collapses menu, and changes icon to Green Star.
