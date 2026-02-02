@@ -54,10 +54,6 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   double? _selectedDestLat;
   double? _selectedDestLng;
 
-  // Cancel button reveal state
-  double _cancelRevealOffset = 0.0;
-  bool _isCancelRevealed = false;
-
   // Vehicle selection state
   int _selectedVehicleIndex = 0;
 
@@ -309,10 +305,37 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         id: 'friend2',
         name: '馴鹿小姐',
         emoji: '🦌',
-        // Slightly away from user (northeast)
+        // Northeast of user
         lat: centerLat + 0.003,
         lng: centerLng + 0.004,
         color: Colors.orange,
+      ),
+      _MockFriend(
+        id: 'friend3',
+        name: '棕熊先生',
+        emoji: '🐻',
+        // Southwest of user
+        lat: centerLat - 0.002,
+        lng: centerLng - 0.003,
+        color: Colors.brown,
+      ),
+      _MockFriend(
+        id: 'friend4',
+        name: '灰狼先生',
+        emoji: '🐺',
+        // Northwest of user
+        lat: centerLat + 0.004,
+        lng: centerLng - 0.002,
+        color: Colors.blueGrey,
+      ),
+      _MockFriend(
+        id: 'friend5',
+        name: '紅狐小姐',
+        emoji: '🦊',
+        // Southeast of user
+        lat: centerLat - 0.003,
+        lng: centerLng + 0.005,
+        color: Colors.deepOrange,
       ),
     ];
 
@@ -585,144 +608,17 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
             ),
           ),
 
-          // 4. Confirm & Cancel Buttons (Bottom, when route is active)
-          if (_isRouteSelected)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: MediaQuery.of(context).padding.bottom + 24,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Confirm Button (draggable to reveal cancel below)
-                  GestureDetector(
-                    onVerticalDragUpdate: (details) {
-                      setState(() {
-                        _cancelRevealOffset -= details.delta.dy;
-                        _cancelRevealOffset =
-                            _cancelRevealOffset.clamp(0.0, 80.0);
-                        if (_cancelRevealOffset > 40) {
-                          _isCancelRevealed = true;
-                        }
-                      });
-                    },
-                    onVerticalDragEnd: (details) {
-                      setState(() {
-                        _cancelRevealOffset = 0;
-                      });
-                    },
-                    onTap: _showVehicleSelectionSheet,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 100),
-                      transform: Matrix4.translationValues(
-                          0, -_cancelRevealOffset * 0.5, 0),
-                      child: Container(
-                        width: double.infinity,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceDark,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: AppColors.dividerDark,
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              '確認叫車',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (_selectedDestinationName != null)
-                              Text(
-                                _selectedDestinationName!,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  fontSize: 12,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Cancel Button (revealed BELOW confirm by dragging up)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    height: _isCancelRevealed ? 68 : 0,
-                    child: _isCancelRevealed
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() => _isCancelRevealed = false);
-                                _clearRoute();
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                height: 56,
-                                decoration: BoxDecoration(
-                                  color: AppColors.error,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: const Center(
-                                  child: Text(
-                                    '取消',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-
-                  // Drag hint
-                  if (!_isCancelRevealed)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        '↑ 上滑取消',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+          // 4. Inline Vehicle Selection Sheet (slides up when route is selected)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            left: 0,
+            right: 0,
+            bottom: _isRouteSelected ? 0 : -400,
+            child: _buildInlineVehicleSheet(),
+          ),
         ],
       ),
-    );
-  }
-
-  /// Show vehicle selection bottom sheet
-  void _showVehicleSelectionSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _buildVehicleSelectionSheet(),
     );
   }
 
@@ -978,39 +874,56 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     }
   }
 
-  /// Build vehicle selection sheet content
-  Widget _buildVehicleSelectionSheet() {
+  /// Build inline vehicle selection sheet (slides up from bottom)
+  Widget _buildInlineVehicleSheet() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Container(
-      height: MediaQuery.of(context).size.height * 0.55,
+      height: 380 + bottomPadding,
       decoration: const BoxDecoration(
         color: AppColors.surfaceDark,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
-          // Handle
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
+          // Header with title, destination, and close button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '選擇車型',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (_selectedDestinationName != null)
+                        Text(
+                          '前往 $_selectedDestinationName',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6),
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _clearRoute,
+                  icon: const Icon(Icons.close, color: Colors.white70),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 8),
 
-          // Title
-          const Text(
-            '選擇車型',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          //test
           // Vehicle Options
           Expanded(
             child: StatefulBuilder(
@@ -1065,15 +978,13 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
               20,
               12,
               20,
-              MediaQuery.of(context).padding.bottom + 20,
+              bottomPadding + 16,
             ),
             child: GestureDetector(
               onTap: () {
                 final priceDog = _calculatePrice('元氣汪汪');
                 final priceCat = _calculatePrice('招財貓貓');
                 final priceBear = _calculatePrice('北極熊阿北');
-
-                Navigator.pop(context);
 
                 // Navigate to waiting page
                 context.push(
