@@ -37,6 +37,7 @@ dependencies:
   geolocator: ^14.0.2
   provider: ^6.1.5+1
   http: ^1.2.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

@@ -157,12 +157,14 @@ class WeeklyEarningsChart extends StatelessWidget {
                       },
                     ),
                     touchCallback: (FlTouchEvent event, barTouchResponse) {
-                      if (!event.isInterestedForInteractions ||
-                          barTouchResponse == null ||
+                      if (barTouchResponse == null ||
                           barTouchResponse.spot == null) {
                         return;
                       }
-                      if (event is FlTapUpEvent) {
+                      // Handle both tap and touch events
+                      if (event is FlTapUpEvent ||
+                          event is FlPanEndEvent ||
+                          event is FlLongPressEnd) {
                         final index =
                             barTouchResponse.spot!.touchedBarGroupIndex;
                         if (index >= 0 && index < sortedKeys.length) {

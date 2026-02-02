@@ -372,7 +372,9 @@ class _DriverHistoryPageState extends State<DriverHistoryPage> {
               _DetailRow(
                 icon: Icons.person_outline,
                 label: '乘客',
-                value: order.passengerName,
+                value: order.passengerName.isNotEmpty
+                    ? '${order.passengerName[0]}先生'
+                    : '先生',
               ),
               const SizedBox(height: 16),
               _DetailRow(

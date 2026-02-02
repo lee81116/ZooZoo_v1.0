@@ -2,6 +2,8 @@ import 'dart:async'; // Add this for Timer
 import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
@@ -42,6 +44,14 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   double _avatarBottom = 120.0;
   bool _isAvatarDragging = false;
 
+  // Status message shown at top
+  String? _statusMessage;
+  double _statusOpacity = 0.0;
+  Timer? _statusMessageTimer;
+
+  // Local state for background mode (visual only)
+  bool _isBackgroundModeOn = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +68,7 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
   @override
   void dispose() {
     _timerController?.dispose();
+    _statusMessageTimer?.cancel();
     super.dispose();
   }
 
@@ -96,7 +107,30 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 if (widget.state.status == DriverStatus.hasOrder)
                   _buildNewOrderUI(widget.state.currentOrder!)
                 else ...[
-                  // Feedback message removed
+                  // Status message with fade animation
+                  if (_statusMessage != null)
+                    AnimatedOpacity(
+                      opacity: _statusOpacity,
+                      duration: const Duration(milliseconds: 300),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _statusMessage!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+
                   _buildDrivingModeSelector(widget.state), // New Selector
                   const SizedBox(height: 12),
                   _buildFloatingBottomPanel(widget.state),
@@ -916,7 +950,9 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                 icon: !state.isMuted ? Icons.volume_up : Icons.volume_off,
                 isActive: !state.isMuted,
                 onTap: () {
+                  final willBeMuted = !state.isMuted;
                   context.read<DriverBloc>().toggleMute();
+                  _showStatusMessage(willBeMuted ? '關閉播報' : '開啟播報');
                 },
               ),
               const SizedBox(width: 12),
@@ -926,19 +962,13 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
                     : Icons.voice_over_off,
                 isActive: state.chatVoiceEnabledSafe,
                 onTap: () {
+                  final willBeEnabled = !state.chatVoiceEnabledSafe;
                   context.read<DriverBloc>().toggleChatVoiceReply();
+                  _showStatusMessage(willBeEnabled ? '開啟語音' : '關閉語音');
                 },
               ),
               const SizedBox(width: 12),
-              _buildToggleButton(
-                icon: state.areNotificationsEnabled
-                    ? Icons.layers
-                    : Icons.layers_clear,
-                isActive: state.areNotificationsEnabled,
-                onTap: () {
-                  context.read<DriverBloc>().toggleNotifications();
-                },
-              ),
+              _buildBackgroundModeButton(),
             ],
           ),
 
@@ -979,6 +1009,82 @@ class _DriverWaitingViewState extends State<DriverWaitingView>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showStatusMessage(String message) {
+    _statusMessageTimer?.cancel();
+
+    setState(() {
+      _statusMessage = message;
+      _statusOpacity = 1.0;
+    });
+
+    _statusMessageTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _statusOpacity = 0.0;
+        });
+      }
+    });
+  }
+
+  Widget _buildBackgroundModeButton() {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isBackgroundModeOn = !_isBackgroundModeOn;
+        });
+
+        final message = _isBackgroundModeOn ? '背景模式已開啟' : '背景模式已關閉';
+        _showStatusMessage(message);
+
+        if (_isBackgroundModeOn) {
+          // Delay briefly to show the message
+          Future.delayed(const Duration(milliseconds: 500), () async {
+            if (Platform.isAndroid) {
+              SystemNavigator.pop(); // Minimized on Android
+            } else {
+              // On iOS, try to open Google Maps to background the app
+              final Uri googleMapsUrl = Uri.parse('comgooglemaps://');
+              try {
+                if (!await launchUrl(googleMapsUrl,
+                    mode: LaunchMode.externalApplication)) {
+                  throw 'Could not launch Google Maps';
+                }
+              } catch (e) {
+                // Fallback to Google Web if Google Maps is not installed
+                final Uri googleWebUrl = Uri.parse('https://www.google.com');
+                await launchUrl(googleWebUrl,
+                    mode: LaunchMode.externalApplication);
+              }
+            }
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: _isBackgroundModeOn
+              ? AppColors.success.withOpacity(0.1)
+              : AppColors.background,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: _isBackgroundModeOn ? AppColors.success : AppColors.divider,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          _isBackgroundModeOn ? '背景模式 ON' : '背景模式',
+          style: TextStyle(
+            color: _isBackgroundModeOn
+                ? AppColors.success
+                : AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
