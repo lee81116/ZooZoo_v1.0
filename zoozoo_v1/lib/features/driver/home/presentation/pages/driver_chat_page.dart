@@ -4,7 +4,9 @@ import '../../../../../core/models/chat_message.dart';
 import '../../../../../core/services/chat_storage_service.dart';
 
 class DriverChatPage extends StatefulWidget {
-  const DriverChatPage({super.key});
+  final String? passengerName;
+
+  const DriverChatPage({super.key, this.passengerName});
 
   @override
   State<DriverChatPage> createState() => _DriverChatPageState();
@@ -119,23 +121,14 @@ class _DriverChatPageState extends State<DriverChatPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("乘客聊天室"),
+        title: Text(
+          widget.passengerName != null && widget.passengerName!.isNotEmpty
+              ? '${widget.passengerName![0]}先生'
+              : '先生',
+        ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0.5,
-        actions: [
-          // Demo buttons for voice messages
-          IconButton(
-            icon: const Icon(Icons.mic, color: AppColors.primary),
-            onPressed: _simulatePassengerVoiceMessage,
-            tooltip: '模擬乘客語音',
-          ),
-          IconButton(
-            icon: const Icon(Icons.record_voice_over, color: AppColors.accent),
-            onPressed: _simulateDriverVoiceReply,
-            tooltip: '模擬司機語音回覆',
-          ),
-        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

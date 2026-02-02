@@ -194,7 +194,9 @@ class _IncomingOrderSheetState extends State<IncomingOrderSheet>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              order.passenger.name,
+                              order.passenger.name.isNotEmpty
+                                  ? '${order.passenger.name[0]}先生'
+                                  : '先生',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -279,7 +281,7 @@ class _IncomingOrderSheetState extends State<IncomingOrderSheet>
                           ),
                         ],
                       ),
-                      
+
                       // Dotted line
                       Padding(
                         padding: const EdgeInsets.only(left: 15),
@@ -291,7 +293,8 @@ class _IncomingOrderSheetState extends State<IncomingOrderSheet>
                                 (_) => Container(
                                   width: 2,
                                   height: 6,
-                                  margin: const EdgeInsets.symmetric(vertical: 2),
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 2),
                                   color: AppColors.divider,
                                 ),
                               ),

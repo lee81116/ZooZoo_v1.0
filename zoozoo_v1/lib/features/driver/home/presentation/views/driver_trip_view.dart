@@ -849,7 +849,9 @@ class _DriverTripViewState extends State<DriverTripView>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          order.passenger.name,
+                          order.passenger.name.isNotEmpty
+                              ? '${order.passenger.name[0]}先生'
+                              : '先生',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -887,7 +889,9 @@ class _DriverTripViewState extends State<DriverTripView>
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (context) => const DriverChatPage()),
+                                builder: (context) => DriverChatPage(
+                                      passengerName: order.passenger.name,
+                                    )),
                           );
                         },
                       ),
