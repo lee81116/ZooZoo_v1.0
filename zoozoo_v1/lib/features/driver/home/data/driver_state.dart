@@ -96,6 +96,7 @@ class DriverState {
   final bool areNotificationsEnabled;
   final bool? isChatVoiceReplyEnabled; // Nullable for hot reload safety
   final Set<DrivingMode>? activeDrivingModes; // Nullable for hot reload
+  final bool isBackgroundModeOn; // New field for background mode
 
   bool get chatVoiceEnabledSafe => isChatVoiceReplyEnabled ?? true;
   Set<DrivingMode> get activeModesSafe =>
@@ -112,6 +113,7 @@ class DriverState {
     this.areNotificationsEnabled = true,
     this.isChatVoiceReplyEnabled = true,
     this.activeDrivingModes = const {DrivingMode.standard},
+    this.isBackgroundModeOn = false,
   });
 
   DriverState copyWith({
@@ -127,6 +129,7 @@ class DriverState {
     bool? areNotificationsEnabled,
     bool? isChatVoiceReplyEnabled,
     Set<DrivingMode>? activeDrivingModes,
+    bool? isBackgroundModeOn,
   }) {
     return DriverState(
       status: status ?? this.status,
@@ -141,6 +144,7 @@ class DriverState {
       isChatVoiceReplyEnabled:
           isChatVoiceReplyEnabled ?? this.isChatVoiceReplyEnabled,
       activeDrivingModes: activeDrivingModes ?? this.activeDrivingModes,
+      isBackgroundModeOn: isBackgroundModeOn ?? this.isBackgroundModeOn,
     );
   }
 

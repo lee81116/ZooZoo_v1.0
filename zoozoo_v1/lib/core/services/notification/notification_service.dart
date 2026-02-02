@@ -13,6 +13,11 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
+  final StreamController<String?> _onNotificationTapController =
+      StreamController<String?>.broadcast();
+
+  Stream<String?> get onNotificationTap => _onNotificationTapController.stream;
+
   static const String channelId = 'order_channel';
   static const String channelName = 'Order Notifications';
   static const String channelDescription = 'Notifications for new orders';
@@ -28,7 +33,8 @@ class NotificationService {
       requestSoundPermission: true,
     );
 
-    final InitializationSettings initializationSettings = InitializationSettings(
+    final InitializationSettings initializationSettings =
+        InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsDarwin,
       macOS: initializationSettingsDarwin,
@@ -37,7 +43,8 @@ class NotificationService {
     await flutterLocalNotificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (details) {
-        // Handle notification tap logic here if needed
+        print('DEBUG: Notification tapped! Payload: ${details.payload}');
+        _onNotificationTapController.add(details.payload);
       },
     );
   }
@@ -48,7 +55,8 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       channelId,
       channelName,
       channelDescription: channelDescription,
@@ -61,8 +69,9 @@ class NotificationService {
       presentAlert: true,
       presentBadge: true,
       presentSound: true,
-      sound: 'default', 
-      interruptionLevel: InterruptionLevel.timeSensitive, // Ensures it breaks through
+      sound: 'default',
+      interruptionLevel:
+          InterruptionLevel.timeSensitive, // Ensures it breaks through
     );
 
     const NotificationDetails platformDetails = NotificationDetails(
