@@ -15,6 +15,8 @@ import '../../../../../core/services/map/map_models.dart';
 import '../../../../../core/services/map/mapbox_api_service.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../shared/widgets/glass_button.dart';
+import '../../../../../core/services/weather_service.dart';
+import '../../../../../shared/widgets/rain_effect.dart';
 import 'friend_profile_page.dart';
 import 'personal_profile_page.dart';
 
@@ -26,6 +28,10 @@ class PassengerHomePage extends StatefulWidget {
 }
 
 class _PassengerHomePageState extends State<PassengerHomePage> {
+  // Weather state
+  final _weatherService = WeatherService();
+  WeatherType _currentWeather = WeatherType.clear;
+
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _pointAnnotationManager;
 
@@ -214,6 +220,9 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       userLat = position.latitude;
       userLng = position.longitude;
       debugPrint('User location: $userLat, $userLng');
+
+      // Fetch Weather
+      _fetchWeather(userLat, userLng);
     } catch (e) {
       debugPrint('Failed to get user location: $e. Using default.');
     }
@@ -293,6 +302,14 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         }
         break;
       }
+    }
+  }
+
+  Future<void> _fetchWeather(double lat, double lng) async {
+    final weather = await _weatherService.fetchCurrentWeather(lat, lng);
+    if (mounted) {
+      setState(() => _currentWeather = weather);
+      debugPrint('Current Weather Code: $weather');
     }
   }
 
@@ -473,6 +490,12 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
               onMapCreated: _onMapCreated,
             ),
           ),
+
+          // Rain Effect Overlay
+          if (_currentWeather == WeatherType.rain)
+            const Positioned.fill(child: RainEffect(isHeavy: false)),
+          if (_currentWeather == WeatherType.heavyRain)
+            const Positioned.fill(child: RainEffect(isHeavy: true)),
 
           // 2. Top Bar (Overlay)
           Positioned(
@@ -969,13 +992,68 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        '選擇車型',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          const Text(
+                            '選擇車型',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (_currentWeather == WeatherType.rain)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: Colors.blue.withValues(alpha: 0.5)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('🌧️', style: TextStyle(fontSize: 12)),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'x1.15',
+                                    style: TextStyle(
+                                      color: Colors.blueAccent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (_currentWeather == WeatherType.heavyRain)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: Colors.red.withValues(alpha: 0.5)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Text('⛈️', style: TextStyle(fontSize: 12)),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'x1.3',
+                                    style: TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                       if (_selectedDestinationName != null)
                         Text(
@@ -1412,8 +1490,18 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     } else {
       final extraDist = _currentRouteDistanceMeters - 1250;
       final units = (extraDist / 200).ceil();
-      basePrice = 85.0 + 7 * units; // Updated logic: 7 TWD per unit
+      basePrice = 85.0 + 6 * units; // Updated logic: 6 TWD per unit
     }
+
+    // Weather Multiplier
+    double weatherMultiplier = 1.0;
+    if (_currentWeather == WeatherType.heavyRain) {
+      weatherMultiplier = 1.3;
+    } else if (_currentWeather == WeatherType.rain) {
+      weatherMultiplier = 1.15;
+    }
+
+    basePrice *= weatherMultiplier;
 
     if (type == '招財貓貓') {
       return (basePrice * 1.5).round();
