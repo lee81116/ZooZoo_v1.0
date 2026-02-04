@@ -59,6 +59,10 @@
 	<string>需要持續存取位置資訊（包含背景執行），以便在您使用其他導航 App 時，仍能接收附近的訂單通知與語音播報。</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>需要持續存取位置資訊，確保司機在背景模式下仍能接收即時訂單。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>需要您的麥克風權限以使用語音指令功能。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>需要語音辨識權限以將您的語音指令轉換為文字。</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

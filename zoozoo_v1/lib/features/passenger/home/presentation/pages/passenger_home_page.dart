@@ -15,6 +15,8 @@ import '../../../../../core/services/map/map_models.dart';
 import '../../../../../core/services/map/mapbox_api_service.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../shared/widgets/glass_button.dart';
+import 'friend_profile_page.dart';
+import 'personal_profile_page.dart';
 
 class PassengerHomePage extends StatefulWidget {
   const PassengerHomePage({super.key});
@@ -56,6 +58,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
 
   // Vehicle selection state
   int _selectedVehicleIndex = 0;
+
+  Offset? _lastTapDownPosition;
 
   // Friend markers data for click handling
   List<_MockFriend> _friends = [];
@@ -227,20 +231,66 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     await _addFriendMarkers(userLat, userLng);
 
     // Update 3D Car Position
-    await _updateCarPosition(
-        userLat, userLng, 0); // Reset bearing or keep current? 0 for now
+    await _updateCarPosition(userLat, userLng, 0);
+  }
+
+  /// Handle map tap - check if user tapped on their own location puck
+  void _onMapTapped(Offset position) async {
+    if (_mapboxMap == null || _initialLat == null || _initialLng == null) {
+      return;
+    }
+
+    // Get coordinate of the tap
+    final tappedPoint = await _mapboxMap!
+        .coordinateForPixel(ScreenCoordinate(x: position.dx, y: position.dy));
+
+    // Get current user location (using initial or updated if available)
+    double userLat = _initialLat!;
+    double userLng = _initialLng!;
+
+    // Calculate Distance
+    final dist = geo.Geolocator.distanceBetween(
+        tappedPoint.coordinates.lat as double,
+        tappedPoint.coordinates.lng as double,
+        userLat,
+        userLng);
+
+    // Threshold: ~50 meters is generous enough for fingers
+    if (dist < 50) {
+      debugPrint("Tapped on Self!");
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const PersonalProfilePage(),
+          ),
+        );
+      }
+    }
   }
 
   /// Handle tap on friend marker
-  void _handleFriendMarkerTap(PointAnnotation annotation) {
+  void _handleFriendMarkerTap(PointAnnotation annotation) async {
     // Find friend by matching coordinates
     for (final friend in _friends) {
       final coords = annotation.geometry.coordinates;
       if ((coords.lng - friend.lng).abs() < 0.0001 &&
           (coords.lat - friend.lat).abs() < 0.0001) {
-        // Navigate to friend without showing red pin (friend marker already exists)
-        _drawNavigationRoute(friend.lat, friend.lng, friend.name,
-            showMarker: false);
+        // Navigate to friend profile page
+        final result = await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => FriendProfilePage(
+              name: friend.name,
+              emoji: friend.emoji,
+              color: friend.color,
+            ),
+          ),
+        );
+
+        // If returned true, start navigation
+        if (result == true) {
+          _drawNavigationRoute(friend.lat, friend.lng, friend.name,
+              showMarker: false);
+        }
         break;
       }
     }
@@ -397,15 +447,31 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       body: Stack(
         children: [
           // 1. Full Screen Map (initialized at real location)
-          MapWidget(
-            cameraOptions: CameraOptions(
-              center: Point(
-                coordinates: Position(_initialLng!, _initialLat!),
+          Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (event) {
+              _lastTapDownPosition = event.localPosition;
+            },
+            onPointerUp: (event) {
+              if (_lastTapDownPosition != null) {
+                final distance =
+                    (event.localPosition - _lastTapDownPosition!).distance;
+                if (distance < 10) {
+                  // It's a tap
+                  _onMapTapped(event.localPosition);
+                }
+              }
+            },
+            child: MapWidget(
+              cameraOptions: CameraOptions(
+                center: Point(
+                  coordinates: Position(_initialLng!, _initialLat!),
+                ),
+                zoom: 15.0,
               ),
-              zoom: 15.0,
+              styleUri: MapboxStyles.STANDARD,
+              onMapCreated: _onMapCreated,
             ),
-            styleUri: MapboxStyles.STANDARD,
-            onMapCreated: _onMapCreated,
           ),
 
           // 2. Top Bar (Overlay)
@@ -437,6 +503,16 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                           icon: Icons.my_location,
                           iconColor: AppColors.primary,
                           onPressed: _flyToUserLocation,
+                        ),
+                        const SizedBox(height: 12),
+                        // Friends List Button
+                        GlassIconButton(
+                          icon: Icons.people,
+                          iconColor: Colors.white,
+                          onPressed: () {
+                            // TODO: Navigate to Friend List Page
+                            debugPrint("Open Friends List");
+                          },
                         ),
                       ],
                     ),
@@ -747,7 +823,6 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
       );
     } catch (_) {}
   }
-
 
   /// Build location visibility toggle button (top-left)
   Widget _buildLocationVisibilityToggle() {
