@@ -56,6 +56,10 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   PointAnnotation? _currentDestinationMarker;
   bool _isSearching = false;
 
+  // Pin & Drag mode for fine-tuning destination
+  bool _isPinningMode = false;
+  String? _pinnedSearchName;
+
   // Route selection state
   bool _isRouteSelected = false;
   String? _selectedDestinationName;
@@ -544,13 +548,13 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
               ),
             ),
           ),
-          // 3. Draggable Search Sheet (Animated - slides down when route selected)
+          // 3. Draggable Search Sheet (Animated - slides down when route selected or pinning)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 400),
             curve: Curves.easeInOut,
             left: 0,
             right: 0,
-            bottom: _isRouteSelected ? -350 : 0,
+            bottom: (_isRouteSelected || _isPinningMode) ? -350 : 0,
             height: MediaQuery.of(context).size.height * 0.35,
             child: ClipRRect(
               borderRadius:
@@ -666,13 +670,11 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                                 child: _buildQuickActionCard(
                                   icon: Icons.home,
                                   label: '家',
-                                  onTap: () {
-                                    _drawNavigationRoute(
-                                      25.1321,
-                                      121.4986,
-                                      'No. 251, Guangming Rd., Beitou Dist., Taipei City 112022, Taiwan (R.O.C.)',
-                                    );
-                                  },
+                                  onTap: () => _startPinningMode(
+                                    25.1321,
+                                    121.4986,
+                                    '家',
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -680,7 +682,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
                                 child: _buildQuickActionCard(
                                   icon: Icons.business,
                                   label: '公司',
-                                  onTap: () => _drawNavigationRoute(
+                                  onTap: () => _startPinningMode(
                                     25.0339,
                                     121.5644,
                                     '台北101',
@@ -707,7 +709,85 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
             ),
           ),
 
-          // 4. Inline Vehicle Selection Sheet (slides up when route is selected)
+          // 4. Pinning Mode UI (center pin + confirm button)
+          if (_isPinningMode) ...[
+            // Center Pin Icon
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 48),
+                child: Icon(
+                  Icons.location_on,
+                  color: Colors.red,
+                  size: 48,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Confirm/Cancel Buttons at Bottom
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 40,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Instruction Text
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      '拖曳地圖調整位置',
+                      style: TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Confirm Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _confirmPinnedLocation,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        '確認地點',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Cancel Button
+                  TextButton(
+                    onPressed: _cancelPinningMode,
+                    child: const Text(
+                      '取消',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // 5. Inline Vehicle Selection Sheet (slides up when route is selected)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -1291,7 +1371,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: InkWell(
-        onTap: () => _drawNavigationRoute(lat, lng, address),
+        onTap: () => _startPinningMode(lat, lng, address),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1564,6 +1644,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   }
 
   /// Handle search submission - real Mapbox geocoding
+  /// Enters pinning mode to allow user to fine-tune location
   Future<void> _handleSearch(String query) async {
     if (query.trim().isEmpty) return;
 
@@ -1577,7 +1658,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
 
       if (result != null) {
         _searchController.clear();
-        await _drawNavigationRoute(
+        await _startPinningMode(
           result.latitude,
           result.longitude,
           result.placeName,
@@ -1599,6 +1680,50 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         setState(() => _isSearching = false);
       }
     }
+  }
+
+  /// Start pinning mode - fly to location and show pin for fine-tuning
+  Future<void> _startPinningMode(double lat, double lng, String name) async {
+    await _mapboxMap?.flyTo(
+      CameraOptions(
+        center: Point(coordinates: Position(lng, lat)),
+        zoom: 16.0,
+      ),
+      MapAnimationOptions(duration: 1000),
+    );
+
+    if (mounted) {
+      setState(() {
+        _isPinningMode = true;
+        _pinnedSearchName = name;
+      });
+    }
+  }
+
+  /// Confirm the pinned location and draw route
+  Future<void> _confirmPinnedLocation() async {
+    if (_mapboxMap == null) return;
+
+    try {
+      final cameraState = await _mapboxMap!.getCameraState();
+      final center = cameraState.center;
+      final lat = center.coordinates.lat.toDouble();
+      final lng = center.coordinates.lng.toDouble();
+
+      setState(() => _isPinningMode = false);
+
+      await _drawNavigationRoute(lat, lng, _pinnedSearchName ?? '自訂地點');
+    } catch (e) {
+      debugPrint('Error confirming pinned location: $e');
+    }
+  }
+
+  /// Cancel pinning mode
+  void _cancelPinningMode() {
+    setState(() {
+      _isPinningMode = false;
+      _pinnedSearchName = null;
+    });
   }
 
   /// Add a destination pin marker (removes previous one first)
