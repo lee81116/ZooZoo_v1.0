@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,6 +55,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
 
   // Track current destination marker for cleanup
   PointAnnotation? _currentDestinationMarker;
+  PointAnnotation? _currentDurationMarker;
   bool _isSearching = false;
 
   // Route selection state
@@ -65,10 +67,86 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   // Vehicle selection state
   int _selectedVehicleIndex = 0;
 
+  // Options state for Vehicle Selection
+  final List<String> _vehicleOptions = ['一般模式', '幫我趕一下', '舒適模式', '安靜模式'];
+  Set<String> _selectedVehicleOptions = {'一般模式'};
+  bool _showConflictToast = false;
+  Timer? _toastTimer;
+
   Offset? _lastTapDownPosition;
 
   // Friend markers data for click handling
   List<_MockFriend> _friends = [];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    _toastTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handleOptionTap(String option) {
+    if (option == '幫我趕一下') {
+      setState(() {
+        if (_selectedVehicleOptions.contains(option)) {
+          _selectedVehicleOptions.remove(option);
+          // Fallback to General if no specific mode left
+          if (!_selectedVehicleOptions.contains('舒適模式')) {
+            _selectedVehicleOptions.add('一般模式');
+          }
+        } else {
+          _selectedVehicleOptions.add(option);
+          _selectedVehicleOptions.remove('一般模式');
+          _selectedVehicleOptions.remove('舒適模式'); // Auto-uncheck Comfort
+        }
+      });
+    } else if (option == '舒適模式') {
+      if (_selectedVehicleOptions.contains('幫我趕一下')) {
+        _showToast();
+        return;
+      }
+      setState(() {
+        if (_selectedVehicleOptions.contains(option)) {
+          _selectedVehicleOptions.remove(option);
+          if (!_selectedVehicleOptions.contains('幫我趕一下')) {
+            _selectedVehicleOptions.add('一般模式');
+          }
+        } else {
+          _selectedVehicleOptions.add(option);
+          _selectedVehicleOptions.remove('一般模式');
+        }
+      });
+    } else if (option == '一般模式') {
+      setState(() {
+        _selectedVehicleOptions.add('一般模式');
+        _selectedVehicleOptions.remove('幫我趕一下');
+        _selectedVehicleOptions.remove('舒適模式');
+      });
+    } else if (option == '安靜模式') {
+      setState(() {
+        if (_selectedVehicleOptions.contains(option)) {
+          _selectedVehicleOptions.remove(option);
+        } else {
+          _selectedVehicleOptions.add(option);
+        }
+      });
+    }
+  }
+
+  void _showToast() {
+    setState(() {
+      _showConflictToast = true;
+    });
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showConflictToast = false;
+        });
+      }
+    });
+  }
 
   // 3D Model configuration - Car
   static const _carModelAssetPath = 'assets/3dmodels/base_basic_pbr.glb';
@@ -91,12 +169,13 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     });
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
+  // @override
+  // void dispose() {
+  //   _searchController.dispose();
+  //   _searchFocusNode.dispose();
+  //   super.dispose();
+  // }
+  // Actually, I should just remove it.
 
   /// Fetch initial location before showing map
   Future<void> _fetchInitialLocation() async {
@@ -713,7 +792,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
             curve: Curves.easeInOut,
             left: 0,
             right: 0,
-            bottom: _isRouteSelected ? 0 : -400,
+            bottom: _isRouteSelected ? 0 : -1000,
             child: _buildInlineVehicleSheet(),
           ),
         ],
@@ -975,220 +1054,313 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   /// Build inline vehicle selection sheet (slides up from bottom)
   Widget _buildInlineVehicleSheet() {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    return Container(
-      height: 380 + bottomPadding,
-      decoration: const BoxDecoration(
-        color: AppColors.surfaceDark,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Header with title, destination, and close button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            '選擇車型',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (_currentWeather == WeatherType.rain)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: Colors.blue.withValues(alpha: 0.5)),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Text('🌧️', style: TextStyle(fontSize: 12)),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'x1.15',
-                                    style: TextStyle(
-                                      color: Colors.blueAccent,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          if (_currentWeather == WeatherType.heavyRain)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: Colors.red.withValues(alpha: 0.5)),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Text('⛈️', style: TextStyle(fontSize: 12)),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'x1.3',
-                                    style: TextStyle(
-                                      color: Colors.redAccent,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                      if (_selectedDestinationName != null)
-                        Text(
-                          '前往 $_selectedDestinationName',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: _clearRoute,
-                  icon: const Icon(Icons.close, color: Colors.white70),
-                ),
-              ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 1. Top Section: Conflict Toast (Floating) + Vehicle Options (Floating/Transparent)
+        // Conflict Toast
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
+          opacity: _showConflictToast ? 1.0 : 0.0,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(20),
             ),
-          ),
-          const SizedBox(height: 8),
-
-          // Vehicle Options
-          Expanded(
-            child: StatefulBuilder(
-              builder: (context, setSheetState) {
-                // Calculate prices dynamically
-                final priceDog = _calculatePrice('元氣汪汪');
-                final priceCat = _calculatePrice('招財貓貓');
-                final priceBear = _calculatePrice('北極熊阿北');
-
-                return ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    _buildVehicleOption(
-                      name: '元氣汪汪',
-                      emoji: '🐕',
-                      price: 'NT\$$priceDog',
-                      time: '3 分鐘',
-                      subtitle: '標準速速',
-                      isSelected: _selectedVehicleIndex == 0,
-                      onTap: () =>
-                          setSheetState(() => _selectedVehicleIndex = 0),
-                    ),
-                    _buildVehicleOption(
-                      name: '招財貓貓',
-                      emoji: '🐱',
-                      price: 'NT\$$priceCat',
-                      time: '5 分鐘',
-                      subtitle: '尊榮速速',
-                      isSelected: _selectedVehicleIndex == 1,
-                      onTap: () =>
-                          setSheetState(() => _selectedVehicleIndex = 1),
-                    ),
-                    _buildVehicleOption(
-                      name: '北極熊阿北',
-                      emoji: '🐻‍❄️',
-                      price: 'NT\$$priceBear',
-                      time: '8 分鐘',
-                      subtitle: '減碳速速',
-                      isSelected: _selectedVehicleIndex == 2,
-                      onTap: () =>
-                          setSheetState(() => _selectedVehicleIndex = 2),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-
-          // Confirm Button
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              bottomPadding + 16,
-            ),
-            child: GestureDetector(
-              onTap: () {
-                final priceDog = _calculatePrice('元氣汪汪');
-                final priceCat = _calculatePrice('招財貓貓');
-                final priceBear = _calculatePrice('北極熊阿北');
-
-                // Navigate to waiting page
-                context.push(
-                  Routes.passengerBooking,
-                  extra: {
-                    'userLocation': AppLatLng(
-                      _initialLat ?? _defaultLat,
-                      _initialLng ?? _defaultLng,
-                    ),
-                    'destinationLocation': AppLatLng(
-                      _selectedDestLat ?? _defaultLat,
-                      _selectedDestLng ?? _defaultLng,
-                    ),
-                    'vehicleType': [
-                      '元氣汪汪',
-                      '招財貓貓',
-                      '北極熊阿北'
-                    ][_selectedVehicleIndex],
-                    'price': [
-                      priceDog,
-                      priceCat,
-                      priceBear
-                    ][_selectedVehicleIndex],
-                  },
-                );
-
-                // IMMEDIATELY reset home page state
-                _clearRoute();
-              },
-              child: Container(
-                width: double.infinity,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Center(
-                  child: Text(
-                    '確認預約',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+            child: const Text(
+              '趕時間時無法選擇舒適模式',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+
+        // Vehicle Options Row (Transparent Background)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _vehicleOptions.map((option) {
+              final isSelected = _selectedVehicleOptions.contains(option);
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => _handleOptionTap(option),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFE0E0E0)
+                          : Colors.white, // Selected is darker
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        if (isSelected)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 4),
+                            child: Icon(Icons.check,
+                                size: 16, color: Colors.black),
+                          ),
+                        Text(
+                          option,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 2. Main Sheet Content (Dark Background)
+        Container(
+          height: 480 + bottomPadding,
+          decoration: const BoxDecoration(
+            color: AppColors.surfaceDark,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Header with title, destination, and close button
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text(
+                                '選擇車型',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (_currentWeather == WeatherType.rain)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color:
+                                            Colors.blue.withValues(alpha: 0.5)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Text('🌧️',
+                                          style: TextStyle(fontSize: 12)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'x1.15',
+                                        style: TextStyle(
+                                          color: Colors.blueAccent,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (_currentWeather == WeatherType.heavyRain)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color:
+                                            Colors.red.withValues(alpha: 0.5)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Text('⛈️',
+                                          style: TextStyle(fontSize: 12)),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'x1.3',
+                                        style: TextStyle(
+                                          color: Colors.redAccent,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (_selectedDestinationName != null)
+                            Builder(builder: (context) {
+                              final arrivalTime = DateTime.now().add(Duration(
+                                  seconds:
+                                      _currentRouteDurationSeconds.toInt()));
+                              final eta =
+                                  '${arrivalTime.hour.toString().padLeft(2, '0')}:${arrivalTime.minute.toString().padLeft(2, '0')}';
+
+                              return Text(
+                                '前往 $_selectedDestinationName, 預計$eta抵達',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 13,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              );
+                            }),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _clearRoute,
+                      icon: const Icon(Icons.close, color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Vehicle Options List
+              Expanded(
+                child: StatefulBuilder(
+                  builder: (context, setSheetState) {
+                    // Calculate prices dynamically
+                    final priceDog = _calculatePrice('元氣汪汪');
+                    final priceCat = _calculatePrice('招財貓貓');
+                    final priceBear = _calculatePrice('北極熊阿北');
+
+                    return ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      children: [
+                        _buildVehicleOption(
+                          name: '元氣汪汪',
+                          emoji: '🐕',
+                          price: 'NT\$$priceDog',
+                          time: '3 分鐘',
+                          subtitle: '標準速速',
+                          isSelected: _selectedVehicleIndex == 0,
+                          onTap: () =>
+                              setSheetState(() => _selectedVehicleIndex = 0),
+                        ),
+                        _buildVehicleOption(
+                          name: '招財貓貓',
+                          emoji: '🐱',
+                          price: 'NT\$$priceCat',
+                          time: '5 分鐘',
+                          subtitle: '尊榮速速',
+                          isSelected: _selectedVehicleIndex == 1,
+                          onTap: () =>
+                              setSheetState(() => _selectedVehicleIndex = 1),
+                        ),
+                        _buildVehicleOption(
+                          name: '北極熊阿北',
+                          emoji: '🐻‍❄️',
+                          price: 'NT\$$priceBear',
+                          time: '8 分鐘',
+                          subtitle: '減碳速速',
+                          isSelected: _selectedVehicleIndex == 2,
+                          onTap: () =>
+                              setSheetState(() => _selectedVehicleIndex = 2),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+              // Dark Coffee Block Footer
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(20, 24, 20, bottomPadding + 16),
+                decoration: const BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Confirm Button
+                    GestureDetector(
+                      onTap: () {
+                        final priceDog = _calculatePrice('元氣汪汪');
+                        final priceCat = _calculatePrice('招財貓貓');
+                        final priceBear = _calculatePrice('北極熊阿北');
+
+                        // Navigate to waiting page
+                        context.push(
+                          Routes.passengerBooking,
+                          extra: {
+                            'userLocation': AppLatLng(
+                              _initialLat ?? _defaultLat,
+                              _initialLng ?? _defaultLng,
+                            ),
+                            'destinationLocation': AppLatLng(
+                              _selectedDestLat ?? _defaultLat,
+                              _selectedDestLng ?? _defaultLng,
+                            ),
+                            'vehicleType': [
+                              '元氣汪汪',
+                              '招財貓貓',
+                              '北極熊阿北'
+                            ][_selectedVehicleIndex],
+                            'price': [
+                              priceDog,
+                              priceCat,
+                              priceBear
+                            ][_selectedVehicleIndex],
+                          },
+                        );
+
+                        // IMMEDIATELY reset home page state
+                        _clearRoute();
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '確認預約',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1359,6 +1531,8 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     );
   }
 
+  double _currentRouteDurationSeconds = 0;
+
   Future<void> _drawNavigationRoute(
       double destLat, double destLng, String destName,
       {bool showMarker = true}) async {
@@ -1383,6 +1557,7 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         // Use real route geometry
         geoJson = routeResult.toGeoJson();
         _currentRouteDistanceMeters = routeResult.distanceMeters;
+        _currentRouteDurationSeconds = routeResult.durationSeconds;
         debugPrint(
             'Route: ${(routeResult.distanceMeters / 1000).toStringAsFixed(1)}km, '
             '${(routeResult.durationSeconds / 60).toStringAsFixed(0)}min');
@@ -1390,6 +1565,9 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         // Fallback to straight line if API fails
         _currentRouteDistanceMeters =
             _calculateDistance(userLat, userLng, destLat, destLng);
+        // Estimate duration based on 30km/h average speed (8.33 m/s)
+        _currentRouteDurationSeconds = _currentRouteDistanceMeters / 8.33;
+
         geoJson = '''
         {
           "type": "Feature",
@@ -1430,16 +1608,19 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         MapAnimationOptions(duration: 1500),
       );
 
-      // Update 3D Car to face destination (IF we were using car model)
-      // Since we are green dot now, we don't need to rotate the "car".
-      // User requested "Initial map... green dot".
-      // If we want to show car ONLY during route preview, we would set it up here.
-      // But user said "Initial map...".
-      // Let's stick to green dot unless specified otherwise for route preview.
-      // If we *did* want to show car here, we'd call _trySetup3DCarModel() and update position.
-      // For now, I'll comment out the car update to ensure green dot persists.
-      // final bearing = _calculateBearing(userLat, userLng, destLat, destLng);
-      // await _updateCarPosition(userLat, userLng, bearing);
+      // Add duration marker at midpoint
+      if (showMarker) {
+        final durationText =
+            '${(_currentRouteDurationSeconds / 60).toStringAsFixed(0)} min';
+
+        // Calculate midpoint strictly from route geometry if possible
+        double midLat = (userLat + destLat) / 2;
+        double midLng = (userLng + destLng) / 2;
+
+        // If we have a complex route, finding the true midpoint would be better,
+        // but for now, geometric center is a reasonable approximation for the marker placement.
+        await _addDurationMarker(midLat, midLng, durationText);
+      }
 
       // Set route selected state
       if (mounted) {
@@ -1478,36 +1659,68 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
   }
 
   int _calculatePrice(String type) {
-    // Formula: 85 + 7 * (dist - 1250)/200
-    // If dist < 1250, price = 85
+    // 1. Base Fare
+    double total = 85.0;
 
-    // Safety check
-    if (_currentRouteDistanceMeters < 0) return 85;
-
-    double basePrice;
-    if (_currentRouteDistanceMeters <= 1250) {
-      basePrice = 85.0;
-    } else {
-      final extraDist = _currentRouteDistanceMeters - 1250;
-      final units = (extraDist / 200).ceil();
-      basePrice = 85.0 + 6 * units; // Updated logic: 6 TWD per unit
+    // 2. Surcharges
+    // Night Surcharge (23:00 - 06:00)
+    final now = DateTime.now();
+    final isNight = now.hour >= 23 || now.hour < 6;
+    if (isNight) {
+      total += 25.0;
     }
 
-    // Weather Multiplier
+    // Lunar New Year Surcharge (2026/02/16 - 2026/02/22)
+    final isSpringFestival = now.isAfter(DateTime(2026, 2, 16)) &&
+        now.isBefore(DateTime(2026, 2, 23));
+    if (isSpringFestival) {
+      total += 40.0;
+    }
+
+    // 3. Distance Charge
+    // Over 1.25km (1250m), add $5.5 per 200m
+    if (_currentRouteDistanceMeters > 1250) {
+      final extraMeters = _currentRouteDistanceMeters - 1250;
+      final units = extraMeters / 200;
+      total += units * 5;
+    }
+
+    // 4. Time Charge
+    // Peak: 07:00-09:00 or 16:30-19:00 -> $5.0/min
+    // Off-peak -> $3.0/min
+    final currentHour = now.hour + now.minute / 60.0;
+    final bool isPeak = (currentHour >= 7.0 && currentHour < 9.0) ||
+        (currentHour >= 16.5 && currentHour < 19.0);
+
+    double timeRate = isPeak ? 5.0 : 3.0;
+
+    // Adjust time rate based on distance
+    if (_currentRouteDistanceMeters >= 5000 &&
+        _currentRouteDistanceMeters <= 6000) {
+      timeRate -= 2.0;
+    } else if (_currentRouteDistanceMeters > 7000) {
+      timeRate += 2.0;
+    }
+
+    final durationMinutes = _currentRouteDurationSeconds / 60;
+    total += durationMinutes * timeRate;
+
+    // 5. Weather Multiplier
     double weatherMultiplier = 1.0;
     if (_currentWeather == WeatherType.heavyRain) {
       weatherMultiplier = 1.3;
     } else if (_currentWeather == WeatherType.rain) {
       weatherMultiplier = 1.15;
     }
+    total *= weatherMultiplier;
 
-    basePrice *= weatherMultiplier;
-
+    // 6. Vehicle Type Multiplier (Optional/Existing logic)
     if (type == '招財貓貓') {
-      return (basePrice * 1.5).round();
+      total *= 1.5;
     }
 
-    return basePrice.round();
+    // 7. Final Rounding (Ceiling)
+    return total.ceil();
   }
 
   /// Clear route and reset to search mode
@@ -1530,6 +1743,14 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
         try {
           await _pointAnnotationManager!.delete(_currentDestinationMarker!);
           _currentDestinationMarker = null;
+        } catch (_) {}
+      }
+
+      // Remove duration marker
+      if (_currentDurationMarker != null) {
+        try {
+          await _pointAnnotationManager!.delete(_currentDurationMarker!);
+          _currentDurationMarker = null;
         } catch (_) {}
       }
 
@@ -1655,6 +1876,109 @@ class _PassengerHomePageState extends State<PassengerHomePage> {
     } catch (e) {
       debugPrint('Failed to add destination marker: $e');
     }
+  }
+
+  /// Add a duration marker (bubble)
+  Future<void> _addDurationMarker(double lat, double lng, String text) async {
+    if (_pointAnnotationManager == null) return;
+
+    const markerId = 'duration-marker';
+
+    try {
+      // Remove previous duration marker if exists
+      if (_currentDurationMarker != null) {
+        try {
+          await _pointAnnotationManager!.delete(_currentDurationMarker!);
+          _currentDurationMarker = null;
+        } catch (_) {}
+      }
+
+      // Create duration marker image
+      final imageData = await _createDurationMarkerImage(text);
+
+      // Remove existing style image if any
+      try {
+        await _mapboxMap!.style.removeStyleImage(markerId);
+      } catch (_) {}
+
+      // Add image to style
+      await _mapboxMap!.style.addStyleImage(
+        markerId,
+        2.0,
+        MbxImage(width: 120, height: 60, data: imageData),
+        false,
+        [],
+        [],
+        null,
+      );
+
+      // Create new duration marker
+      _currentDurationMarker = await _pointAnnotationManager!.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(lng, lat)),
+          iconImage: markerId,
+          iconSize: 1.0,
+          // iconAnchor: IconAnchor.CENTER, // Center on the line
+          textField: text, // Redundant if baked into image, but good for debug
+          textSize: 0.0, // Hide text field, showing image only
+        ),
+      );
+    } catch (e) {
+      debugPrint('Failed to add duration marker: $e');
+    }
+  }
+
+  /// Create a duration bubble image
+  Future<Uint8List> _createDurationMarkerImage(String text) async {
+    const width = 120;
+    const height = 60;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    // Draw background bubble
+    final bgPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    // Add shadow
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    final rrect = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(5, 5, width - 10.0, height - 10.0),
+      const Radius.circular(20),
+    );
+
+    canvas.drawRRect(rrect.shift(const Offset(2, 2)), shadowPaint);
+    canvas.drawRRect(rrect, bgPaint);
+
+    // Draw text
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Colors.black87,
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    textPainter.layout(maxWidth: width - 20.0);
+    textPainter.paint(
+      canvas,
+      Offset(
+        (width - textPainter.width) / 2,
+        (height - textPainter.height) / 2,
+      ),
+    );
+
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(width, height);
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
   }
 
   /// Create a simple pin marker image
