@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../../core/theme/app_colors.dart';
@@ -19,6 +20,12 @@ class VehicleSelectionSheet extends StatefulWidget {
 
 class _VehicleSelectionSheetState extends State<VehicleSelectionSheet> {
   int _selectedIndex = 0;
+
+  // Options state
+  final List<String> _options = ['一般模式', '幫我趕一下', '舒適模式', '安靜模式'];
+  Set<String> _selectedOptions = {'一般模式'};
+  bool _showConflictToast = false;
+  Timer? _toastTimer;
 
   final List<_VehicleType> _vehicleTypes = [
     _VehicleType(
@@ -52,12 +59,81 @@ class _VehicleSelectionSheetState extends State<VehicleSelectionSheet> {
   ];
 
   @override
+  void dispose() {
+    _toastTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handleOptionTap(String option) {
+    if (option == '幫我趕一下') {
+      // Logic update: Selecting "Hurry Up" overrides "Comfort"
+      setState(() {
+        if (_selectedOptions.contains(option)) {
+          _selectedOptions.remove(option);
+          // Fallback to General if no specific mode left
+          if (!_selectedOptions.contains('舒適模式')) {
+            _selectedOptions.add('一般模式');
+          }
+        } else {
+          _selectedOptions.add(option);
+          _selectedOptions.remove('一般模式');
+          _selectedOptions.remove('舒適模式'); // Auto-uncheck Comfort
+        }
+      });
+    } else if (option == '舒適模式') {
+      if (_selectedOptions.contains('幫我趕一下')) {
+        _showToast();
+        return;
+      }
+      setState(() {
+        if (_selectedOptions.contains(option)) {
+          _selectedOptions.remove(option);
+          if (!_selectedOptions.contains('幫我趕一下')) {
+            _selectedOptions.add('一般模式');
+          }
+        } else {
+          _selectedOptions.add(option);
+          _selectedOptions.remove('一般模式');
+        }
+      });
+    } else if (option == '一般模式') {
+      setState(() {
+        _selectedOptions.add('一般模式');
+        _selectedOptions.remove('幫我趕一下');
+        _selectedOptions.remove('舒適模式');
+      });
+    } else if (option == '安靜模式') {
+      setState(() {
+        if (_selectedOptions.contains(option)) {
+          _selectedOptions.remove(option);
+        } else {
+          _selectedOptions.add(option);
+        }
+      });
+    }
+  }
+
+  void _showToast() {
+    setState(() {
+      _showConflictToast = true;
+    });
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _showConflictToast = false;
+        });
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final selectedVehicle = _vehicleTypes[_selectedIndex];
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.7,
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       decoration: const BoxDecoration(
         color: AppColors.background,
@@ -160,39 +236,118 @@ class _VehicleSelectionSheetState extends State<VehicleSelectionSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          // Confirm button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            child: SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: () {
-                  widget.onConfirm(
-                    selectedVehicle.name,
-                    selectedVehicle.price,
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+
+          // Dark Coffee Block Footer
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+              color: AppColors.accent,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Conflict Toast
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: _showConflictToast ? 1.0 : 0.0,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      '趕時間時無法選擇舒適模式',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  elevation: 0,
                 ),
-                child: Text(
-                  '確認叫車 · \$${selectedVehicle.price}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+
+                // Options Row
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _options.map((option) {
+                      final isSelected = _selectedOptions.contains(option);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: () => _handleOptionTap(option),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFFE0E0E0)
+                                  : Colors.white, // Selected is darker
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              children: [
+                                if (isSelected)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 4),
+                                    child: Icon(Icons.check,
+                                        size: 16, color: Colors.black),
+                                  ),
+                                Text(
+                                  option,
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
-              ),
+                const SizedBox(height: 24),
+
+                // Confirm button
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      widget.onConfirm(
+                        selectedVehicle.name,
+                        selectedVehicle.price,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      '確認叫車 · \$${selectedVehicle.price}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          // Safe area padding
-          SizedBox(height: MediaQuery.of(context).padding.bottom),
         ],
       ),
     );
@@ -205,7 +360,9 @@ class _VehicleSelectionSheetState extends State<VehicleSelectionSheet> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.1) : AppColors.surface,
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.1)
+              : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? AppColors.primary : AppColors.divider,
@@ -241,7 +398,8 @@ class _VehicleSelectionSheetState extends State<VehicleSelectionSheet> {
                     '${vehicle.eta}分鐘',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isSelected ? AppColors.primary : AppColors.textHint,
+                      color:
+                          isSelected ? AppColors.primary : AppColors.textHint,
                     ),
                   ),
                 ],
@@ -257,7 +415,9 @@ class _VehicleSelectionSheetState extends State<VehicleSelectionSheet> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),

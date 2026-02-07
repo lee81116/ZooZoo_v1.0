@@ -54,32 +54,45 @@ class _LoginPageState extends State<LoginPage> {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-              _buildThemeToggle(isDark),
-              const SizedBox(height: 40),
-              _buildHeader(isDark),
-              const SizedBox(height: 48),
-              _buildEmailField(),
-              const SizedBox(height: 16),
-              _buildPasswordField(),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 12),
-                _buildErrorMessage(),
-              ],
-              const SizedBox(height: 24),
-              _buildLoginButton(),
-              const SizedBox(height: 16),
-              _buildRegisterLinks(isDark),
-              const Spacer(),
-              _buildTestAccountHint(isDark),
-              const SizedBox(height: 24),
-            ],
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 20),
+                        _buildThemeToggle(isDark),
+                        const SizedBox(height: 40),
+                        _buildHeader(isDark),
+                        const SizedBox(height: 48),
+                        _buildEmailField(),
+                        const SizedBox(height: 16),
+                        _buildPasswordField(),
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 12),
+                          _buildErrorMessage(),
+                        ],
+                        const SizedBox(height: 24),
+                        _buildLoginButton(),
+                        const SizedBox(height: 16),
+                        _buildRegisterLinks(isDark),
+                        const Spacer(),
+                        _buildTestAccountHint(isDark),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -92,7 +105,8 @@ class _LoginPageState extends State<LoginPage> {
         Text(
           isDark ? '深色模式' : '淺色模式',
           style: TextStyle(
-            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+            color:
+                isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
             fontSize: 14,
           ),
         ),
@@ -107,7 +121,9 @@ class _LoginPageState extends State<LoginPage> {
             height: 32,
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.surfaceDark : AppColors.backgroundSecondary,
+              color: isDark
+                  ? AppColors.surfaceDark
+                  : AppColors.backgroundSecondary,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isDark ? AppColors.dividerDark : AppColors.divider,
@@ -153,7 +169,8 @@ class _LoginPageState extends State<LoginPage> {
           '登入以繼續您的旅程',
           style: TextStyle(
             fontSize: 16,
-            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+            color:
+                isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
           ),
         ),
       ],
@@ -210,7 +227,8 @@ class _LoginPageState extends State<LoginPage> {
         Text(
           '還沒有帳號？',
           style: TextStyle(
-            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+            color:
+                isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
           ),
         ),
         TextButton(
@@ -220,7 +238,8 @@ class _LoginPageState extends State<LoginPage> {
         Text(
           '/',
           style: TextStyle(
-            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+            color:
+                isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
           ),
         ),
         TextButton(
@@ -246,7 +265,9 @@ class _LoginPageState extends State<LoginPage> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
+              color: isDark
+                  ? AppColors.textSecondaryDark
+                  : AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
